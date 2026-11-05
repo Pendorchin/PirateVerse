@@ -3,7 +3,7 @@
   'use strict';
   const Inv = () => PV.Inv;
   const owned = S => S.islands.filter(i => i.owned);
-  const anyB = (S, type) => owned(S).some(i => i.buildings.some(b => b.type === type));
+  const anyB = (S, type) => owned(S).some(i => i.buildings.some(b => PV.D.base(b.type) === type));
   const stored = S => owned(S).reduce((t, i) => t + Inv().storageTotal(i), 0);
 
   const STEPS = [

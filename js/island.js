@@ -28,7 +28,7 @@
   function mark(isl, b, v) {
     const def = D.BUILD[b.type], g = isl.grid;
     for (let j = 0; j < def.h; j++) for (let i = 0; i < def.w; i++) isl._occ[(b.y + j) * g.w + b.x + i] = v;
-    if (b.type === 'almacen') isl._nAlm += v ? 1 : -1;
+    if (D.base(b.type) === 'almacen') isl._nAlm += (v ? 1 : -1) * (def.slots || 1);
   }
 
   function inside(isl, x, y) { const g = isl.grid; return x >= 0 && y >= 0 && x < g.w && y < g.h; }
@@ -37,7 +37,11 @@
 
   // Los leñadores solo talan árboles; la mina saca todo lo demás.
   const DIGGERS = { lenadores: 1, extractor: 1 };
-  const digs = (type, k) => !!k && (type === 'lenadores' ? k === 'madera' : k !== 'madera');
+  const digs = (type, k) => !!k && (D.base(type) === 'lenadores' ? k === 'madera' : k !== 'madera');
+  const isDigger = type => !!DIGGERS[D.base(type)];
+  // Alto horno: además de minerales, convierte lingotes de hierro en acero.
+  const smeltOf = b => b.type === 'alto_horno' ? Object.assign({}, D.SMELT, D.SMELT_BIG) : D.SMELT;
+  const spdOf = b => D.BUILD[b.type].spd || 1;
 
   Isl.canPlace = function (isl, type, x, y) {
     const def = D.BUILD[type], g = isl.grid;
@@ -49,8 +53,8 @@
         if (digs(type, g.res[ty * g.w + tx])) res++;
       }
     }
-    if (type === 'muelle') return touchesWater(isl, x, y, def);
-    return !DIGGERS[type] || res > 0;
+    if (D.base(type) === 'muelle') return touchesWater(isl, x, y, def);
+    return !isDigger(type) || res > 0;
   };
 
   function touchesWater(isl, x, y, def) {
@@ -64,27 +68,31 @@
     const lock = PV.Tech.buildLocked(type);
     if (lock) { if (!quiet) PV.UI.toast(`Primero investigá «${D.TECH[lock].n}» en un Cartógrafo (tecla I).`, 'bad'); return null; }
     if (!Isl.canPlace(isl, type, x, y)) {
-      if (!quiet) PV.UI.toast(type === 'extractor' ? 'La mina tiene que ir sobre piedra o mineral.' : type === 'lenadores' ? 'Los leñadores tienen que ir sobre árboles.' : type === 'muelle' ? 'El muelle tiene que tocar el agua.' : 'No se puede construir ahí.', 'bad');
+      const kb = D.base(type);
+      if (!quiet) PV.UI.toast(kb === 'extractor' ? 'La mina tiene que ir sobre piedra o mineral.' : kb === 'lenadores' ? 'Los leñadores tienen que ir sobre árboles.' : kb === 'muelle' ? 'El muelle tiene que tocar el agua.' : 'No se puede construir ahí.', 'bad');
       return null;
     }
     const cost = D.BUILD[type].cost;
     if (!PV.Inv.canPay(cost, isl)) { PV.UI.toast('Te falta: ' + PV.Inv.costHtml(cost, isl).replace(/<[^>]+>/g, ''), 'bad'); return null; }
     PV.Inv.pay(cost, isl);
     const b = { id: PV.state.nextId++, type, x, y, dir };
-    if (type === 'cinta') b.items = [];
+    const kd = D.base(type);
+    if (kd === 'cinta') b.items = [];
     else { b.prog = 0; b.out = []; }
-    if (DIGGERS[type]) b.ri = 0;
-    if (type === 'fundicion') { b.ore = null; b.oreN = 0; b.fuel = 0; }
-    if (type === 'aserradero') b.n = 0;
-    if (type === 'clasificador') { b.filter = null; b.hold = null; }
-    if (type === 'insertador') { b.filter = null; b.hand = null; b.handN = 0; }
-    if (type === 'cartografo') b.inv = {};
+    if (DIGGERS[kd]) b.ri = 0;
+    if (kd === 'fundicion') { b.ore = null; b.oreN = 0; b.fuel = 0; }
+    if (kd === 'aserradero') b.n = 0;
+    if (kd === 'clasificador') { b.filter = null; b.hold = null; }
+    if (kd === 'insertador') { b.filter = null; b.hand = null; b.handN = 0; }
+    if (kd === 'cartografo') b.inv = {};
     if (D.RECIPES[type]) { b.recipe = Object.keys(D.RECIPES[type])[0]; b.inv = {}; }
-    if (type === 'muelle') { b.store = {}; b.unload = []; }
+    if (kd === 'muelle') { b.store = {}; b.unload = []; }
     isl.buildings.push(b);
     mark(isl, b, b);
     return b;
   }
+
+  Isl.place = tryPlace; // también sirve para pruebas desde la consola
 
   function removeB(isl, b) {
     mark(isl, b, null);
@@ -99,7 +107,7 @@
     if (b.hand) for (let i = 0; i < (b.handN || 1); i++) back.push(b.hand);
     for (const k of back) PV.Inv.add(isl.storage, k, 1);
     for (const bag of [b.inv, b.store]) if (bag) for (const k in bag) PV.Inv.add(isl.storage, k, bag[k]);
-    if (b.type === 'banco') PV.Bank.onRemove(isl);
+    if (D.base(b.type) === 'banco') PV.Bank.onRemove(isl);
   }
 
   function removeAt(isl, x, y) {
@@ -125,13 +133,13 @@
 
   // ¿El edificio b recibe este objeto? Con dry solo pregunta, sin guardarlo.
   function accept(isl, b, item, dry) {
-    switch (b.type) {
+    switch (D.base(b.type)) {
       case 'almacen':
         if (PV.Inv.storageTotal(isl) >= PV.Inv.storageCap(isl)) return false;
         if (!dry) PV.Inv.add(isl.storage, item, 1);
         return true;
       case 'fundicion':
-        if (D.SMELT[item] && (b.oreN === 0 || b.ore === item) && b.oreN < 10) { if (!dry) { b.ore = item; b.oreN++; } return true; }
+        if (smeltOf(b)[item] && (b.oreN === 0 || b.ore === item) && b.oreN < 10) { if (!dry) { b.ore = item; b.oreN++; } return true; }
         if (D.FUEL[item] && b.fuel < 6) { if (!dry) b.fuel += D.FUEL[item]; return true; }
         return false;
       case 'aserradero':
@@ -152,7 +160,7 @@
         if (!dry) PV.Inv.add(b.inv, item, 1);
         return true;
       case 'muelle':
-        if (PV.Inv.sum(b.store) >= Isl.dockCap()) return false;
+        if (PV.Inv.sum(b.store) >= Isl.dockCap(b)) return false;
         if (!dry) PV.Inv.add(b.store, item, 1);
         return true;
     }
@@ -171,8 +179,8 @@
     if (src.type === 'cinta') {
       const it = src.items[0];
       if (it && it.p >= 0.7 && ok(it.t)) { src.items.shift(); return it.t; }
-    } else if (src.type === 'almacen' || src.type === 'muelle') {
-      const bag = src.type === 'almacen' ? isl.storage : src.store;
+    } else if (D.base(src.type) === 'almacen' || D.base(src.type) === 'muelle') {
+      const bag = D.base(src.type) === 'almacen' ? isl.storage : src.store;
       for (const k of Object.keys(bag)) if (ok(k)) { PV.Inv.add(bag, k, -1); return k; }
     } else if (src.out && src.out.length && ok(src.out[0])) {
       return src.out.shift();
@@ -187,20 +195,23 @@
   }
 
   function updateBuilding(isl, b, dt) {
-    const g = isl.grid;
-    switch (b.type) {
+    const g = isl.grid, def = D.BUILD[b.type], spd = spdOf(b);
+    switch (D.base(b.type)) {
       case 'extractor': case 'lenadores': {
         if (!b.out.length && !b.empty) {
-          b.prog += dt * D.EXTRACT_RATE * PV.Tech.fx('mine');
+          b.prog += dt * D.EXTRACT_RATE * PV.Tech.fx('mine') * spd;
           if (b.prog >= 1) {
             b.prog = 0;
             let mined = false;
-            for (let k = 0; k < 9; k++) {
-              const i = (b.ri + k) % 9;
-              const idx = (b.y + Math.floor(i / 3)) * g.w + b.x + (i % 3);
+            const nt = def.w * def.h;
+            for (let k = 0; k < nt; k++) {
+              const i = (b.ri + k) % nt;
+              const idx = (b.y + Math.floor(i / def.w)) * g.w + b.x + (i % def.w);
               if (digs(b.type, g.res[idx]) && g.amt[idx] > 0) {
                 b.out.push(g.res[idx]);
-                if (Math.random() >= PV.Tech.fx('keep') && --g.amt[idx] <= 0) g.res[idx] = '';
+                // El Campamento replanta: los árboles no se agotan. La Mina profunda a veces encuentra plata.
+                if (b.type !== 'campamento' && Math.random() >= PV.Tech.fx('keep') && --g.amt[idx] <= 0) g.res[idx] = '';
+                if (b.type === 'mina_profunda' && Math.random() < 0.04) b.out.push('plata');
                 b.ri = i + 1;
                 mined = true;
                 break;
@@ -215,10 +226,10 @@
       case 'fundicion':
         b.on = b.out.length < 3 && b.oreN >= 2 && b.fuel >= 1;
         if (b.on) {
-          b.prog += dt / 2.5 * PV.Tech.fx('fab');
+          b.prog += dt / 2.5 * PV.Tech.fx('fab') * spd;
           if (b.prog >= 1) {
             b.prog = 0; b.oreN -= 2; b.fuel -= 1;
-            b.out.push(D.SMELT[b.ore]);
+            b.out.push(smeltOf(b)[b.ore]);
             if (!b.oreN) b.ore = null;
           }
         }
@@ -227,8 +238,8 @@
       case 'aserradero':
         b.on = b.out.length < 4 && b.n >= 1;
         if (b.on) {
-          b.prog += dt / 1.2 * PV.Tech.fx('fab');
-          if (b.prog >= 1) { b.prog = 0; b.n--; b.out.push('tablones', 'tablones'); }
+          b.prog += dt / 1.2 * PV.Tech.fx('fab') * spd;
+          if (b.prog >= 1) { b.prog = 0; b.n--; for (let i = 0; i < (b.type === 'aserradero_hid' ? 3 : 2); i++) b.out.push('tablones'); }
         }
         pushOut(isl, b);
         break;
@@ -267,7 +278,7 @@
         const k = Object.keys(b.inv).find(k => b.inv[k] > 0 && PV.Tech.need(k) > 0);
         b.on = !!k;
         if (b.on) {
-          b.prog += dt / D.RESEARCH_T;
+          b.prog += dt / D.RESEARCH_T * spd;
           if (b.prog >= 1) { b.prog = 0; PV.Inv.add(b.inv, k, -1); PV.Tech.study(k); }
         }
         break;
@@ -276,7 +287,7 @@
         const r = D.RECIPES[b.type][b.recipe];
         b.on = b.out.length < 4 && Object.keys(r.in).every(k => (b.inv[k] || 0) >= r.in[k]);
         if (b.on) {
-          b.prog += dt / r.t * PV.Tech.fx('fab');
+          b.prog += dt / r.t * PV.Tech.fx('fab') * spd;
           if (b.prog >= 1) {
             b.prog = 0;
             for (const k in r.in) PV.Inv.add(b.inv, k, -r.in[k]);
@@ -315,7 +326,7 @@
   const missing = (have, need) => Object.keys(need).filter(k => (have[k] || 0) < need[k]).map(k => D.RES[k].n);
 
   function stuckReason(isl, b) {
-    switch (b.type) {
+    switch (D.base(b.type)) {
       case 'extractor': case 'lenadores':
         if (b.out.length) return outBlocked(isl, b);
         if (b.empty) return { ic: '⛔', lvl: 'dead', msg: 'Yacimiento agotado: quitalo y ponelo sobre otro.' };
@@ -337,7 +348,7 @@
       case 'almacen':
         return PV.Inv.storageTotal(isl) >= PV.Inv.storageCap(isl) ? { ic: '⛔', lvl: 'dead', msg: 'Almacén lleno: cargá el barco o poné otro almacén.' } : null;
       case 'muelle':
-        return PV.Inv.sum(b.store) >= Isl.dockCap() ? { ic: '⛔', lvl: 'dead', msg: 'Muelle lleno: pasá con el barco o con un mercante.' } : null;
+        return PV.Inv.sum(b.store) >= Isl.dockCap(b) ? { ic: '⛔', lvl: 'dead', msg: 'Muelle lleno: pasá con el barco o con un mercante.' } : null;
       case 'clasificador':
         return b.hold ? { ic: '🚧', lvl: 'stuck', msg: `No tiene por dónde mandar ${D.RES[b.hold].n}.` } : null;
       case 'cartografo': {
@@ -371,8 +382,8 @@
 
   // ---------- Muelles ----------
 
-  Isl.dockCap = () => Math.round(D.DOCK_CAP * PV.Tech.fx('store'));
-  Isl.docks = isl => isl.buildings.filter(b => b.type === 'muelle');
+  Isl.dockCap = b => Math.round(D.DOCK_CAP * PV.Tech.fx('store') * ((b && D.BUILD[b.type].capMul) || 1));
+  Isl.docks = isl => isl.buildings.filter(b => D.base(b.type) === 'muelle');
 
   // Pasa la carga de los muelles a una bodega (cargo) con lugar libre "room".
   Isl.takeFromDocks = function (isl, cargo, room) {
@@ -394,6 +405,12 @@
     const loaded = Isl.takeFromDocks(isl, S.ship.cargo, Inv.cargoCap() - Inv.cargoTotal());
     let unloaded = 0;
     if (!unload) return { loaded, unloaded };
+    // El Puerto propio repara el barco gratis al llegar.
+    const st = PV.Sea.stats();
+    if (S.ship.hp < st.maxHp && isl.buildings.some(b => b.type === 'puerto_propio')) {
+      S.ship.hp = st.maxHp;
+      PV.UI.toast('⚓ Los carpinteros de tu puerto repararon el barco.', 'good');
+    }
     const marks = new Set();
     for (const d of Isl.docks(isl)) for (const k of d.unload || []) marks.add(k);
     let free = Inv.storageCap(isl) - Inv.storageTotal(isl);
@@ -510,7 +527,7 @@
     for (const k in D.BUILD) if (D.BUILD[k].key === code) { Isl.select(k); return; }
     if (code === 'KeyR') {
       const b = Isl.hover && occAt(Isl.cur, Isl.hover[0], Isl.hover[1]);
-      if (!Isl.sel && b && b.type !== 'almacen') b.dir = (b.dir + 1) % 4;
+      if (!Isl.sel && b && D.base(b.type) !== 'almacen') b.dir = (b.dir + 1) % 4;
       else Isl.dir = (Isl.dir + 1) % 4;
     } else if (code === 'Escape' || code === 'KeyQ') {
       if (Isl.sel) Isl.sel = null; else if (code === 'Escape') Isl.leave();
@@ -544,9 +561,10 @@
       else if (e.button === 2) { removeAt(isl, tx, ty); Isl.drag = { mode: 'remove' }; }
       else if (e.button === 0 && !Isl.sel) {
         const b = occAt(isl, tx, ty);
-        if (b && b.type === 'cartografo') PV.UI.openResearch();
-        else if (b && b.type === 'banco') PV.UI.openBank();
-        else if (b && PV.UI.CHOOSE[b.type]) PV.UI.chooser(b, e.clientX, e.clientY);
+        const kb = b && D.base(b.type);
+        if (kb === 'cartografo') PV.UI.openResearch();
+        else if (kb === 'banco') PV.UI.openBank();
+        else if (b && PV.UI.CHOOSE[kb]) PV.UI.chooser(b, e.clientX, e.clientY);
       }
       else if (e.button === 0 && Isl.sel) {
         if (Isl.sel === 'cinta') {
@@ -575,8 +593,8 @@
   // ---------- Información (tooltip) ----------
 
   function resUnder(isl, b) {
-    const g = isl.grid, tot = {};
-    for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
+    const g = isl.grid, tot = {}, def = D.BUILD[b.type];
+    for (let j = 0; j < def.h; j++) for (let i = 0; i < def.w; i++) {
       const idx = (b.y + j) * g.w + b.x + i;
       if (digs(b.type, g.res[idx])) tot[g.res[idx]] = (tot[g.res[idx]] || 0) + g.amt[idx];
     }
@@ -607,40 +625,41 @@
     if (!inside(isl, tx, ty)) return '';
     const b = occAt(isl, tx, ty);
     if (b) {
-      const def = D.BUILD[b.type];
+      const def = D.BUILD[b.type], kb = D.base(b.type);
       let s = `<b>${def.icon} ${def.n}</b><br>`;
+      if (def.of) s += `<span style="color:#f5d76e">★ ${def.desc}</span><br>`;
       if (b._warn) s += `<span style="color:${b._warn.lvl === 'wait' ? '#f1c40f' : '#ff7b6b'}">${b._warn.ic} ${b._warn.msg}</span><br>`;
-      if (DIGGERS[b.type]) {
+      if (isDigger(b.type)) {
         const tot = resUnder(isl, b), keys = Object.keys(tot);
         s += keys.length ? keys.map(k => `${D.RES[k].n}: quedan ${tot[k]}`).join('<br>') : '<span style="color:#e74c3c">Yacimiento agotado</span>';
-      } else if (b.type === 'fundicion') {
+      } else if (kb === 'fundicion') {
         s += `Mineral: ${b.oreN ? D.RES[b.ore].n + ' ×' + b.oreN : '—'}<br>Combustible: ${b.fuel}`;
         s += b.on ? '<br>🔥 Fundiendo…' : '<br><i>Necesita 2 minerales y combustible (madera o carbón).</i>';
-      } else if (b.type === 'aserradero') {
+      } else if (kb === 'aserradero') {
         s += `Madera: ${b.n}` + (b.on ? '<br>🪚 Cortando…' : '<br><i>Mandale madera por un sendero.</i>');
-      } else if (b.type === 'almacen') {
+      } else if (kb === 'almacen') {
         s += `Almacén de la isla: ${PV.Inv.storageTotal(isl)} / ${PV.Inv.storageCap(isl)}`;
       } else if (b.type === 'cinta') {
         s += `Porteadores con carga: ${b.items.length}`;
-      } else if (b.type === 'clasificador') {
+      } else if (kb === 'clasificador') {
         s += `Sigue derecho: <b>${b.filter ? D.RES[b.filter].n : 'todo'}</b><br>El resto sale por los costados.<br><i>Clic para elegir.</i>`;
-      } else if (b.type === 'insertador') {
+      } else if (kb === 'insertador') {
         s += `Agarra: <b>${b.filter ? D.RES[b.filter].n : 'cualquier cosa'}</b>` + (b.hand ? `<br>Lleva: ${D.RES[b.hand].n} ×${b.handN || 1}` : '') +
           `<br>${(INS_T / PV.Tech.fx('ins')).toFixed(2)} s por viaje · hasta ${1 + PV.Tech.fx('carry')} por vez<br><i>Clic para filtrar.</i>`;
       } else if (D.RECIPES[b.type]) {
         const r = D.RECIPES[b.type][b.recipe];
         s += `Receta: <b>${recipeTxt(r)}</b><br>Tiene: ${Object.keys(r.in).map(k => D.RES[k].n + ' ' + (b.inv[k] || 0) + '/' + r.in[k]).join(', ')}`;
         s += b.on ? '<br>🔨 Trabajando…' : '<br><i>Clic para cambiar la receta.</i>';
-      } else if (b.type === 'banco') {
+      } else if (kb === 'banco') {
         const bk = PV.Bank.of(isl);
-        s += `Guardado: <b>${U.fmt(Math.floor(bk.saved))}</b> doblones<br>Interés: ${(PV.Bank.rate() * 100).toFixed(1).replace('.', ',')}% por minuto (hasta ${U.fmt(PV.Bank.cap())})` + (bk.inv.length ? `<br>Inversiones en curso: ${bk.inv.length}` : '') + '<br><i>Clic para abrir el banco.</i>';
-      } else if (b.type === 'cartografo') {
+        s += `Guardado: <b>${U.fmt(Math.floor(bk.saved))}</b> doblones<br>Interés: ${(PV.Bank.rate(isl) * 100).toFixed(1).replace('.', ',')}% por minuto (hasta ${U.fmt(PV.Bank.cap(isl))})` + (bk.inv.length ? `<br>Inversiones en curso: ${bk.inv.length}` : '') + '<br><i>Clic para abrir el banco.</i>';
+      } else if (kb === 'cartografo') {
         const cur = PV.Tech.st().cur, inv = Object.keys(b.inv).filter(k => b.inv[k] > 0);
         s += cur ? `Investigando: <b>${D.TECH[cur].n}</b> (${Math.round(PV.Tech.progress(cur) * 100)}%)` : 'Sin investigación elegida.';
         if (inv.length) s += '<br>En la mesa: ' + inv.map(k => D.RES[k].n + ' ' + b.inv[k]).join(', ');
         s += '<br><i>Clic para abrir la investigación.</i>';
-      } else if (b.type === 'muelle') {
-        s += `Carga esperando: ${PV.Inv.sum(b.store)} / ${Isl.dockCap()}` + (b.unload.length ? `<br>Descarga del barco: ${b.unload.map(k => D.RES[k].n).join(', ')}` : '') + '<br><i>Clic para elegir qué descargar.</i>';
+      } else if (kb === 'muelle') {
+        s += `Carga esperando: ${PV.Inv.sum(b.store)} / ${Isl.dockCap(b)}` + (b.unload.length ? `<br>Descarga del barco: ${b.unload.map(k => D.RES[k].n).join(', ')}` : '') + '<br><i>Clic para elegir qué descargar.</i>';
       }
       return s + '<br><span style="opacity:.7">R rotar · clic derecho quitar</span>';
     }
@@ -757,6 +776,7 @@
   const NO_ARROW = ['almacen', 'muelle', 'cartografo', 'banco'];
   function drawMachine(ctx, b, isl, t) {
     const def = D.BUILD[b.type], px = b.x * T, py = b.y * T, w = def.w * T, h = def.h * T;
+    if (def.of) return drawEvolved(ctx, b, isl, t, def);
     const cx = px + w / 2, cy = py + h / 2;
     const busy = isl ? t * 8 + (b.id || 0) : 0;
     if (def.w > 1) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; rrect(ctx, px + 5, py + 6, w - 6, h - 6, 6); ctx.fill(); }
@@ -935,7 +955,24 @@
       if (b.hand) drawBundle(ctx, x, y, b.hand, 4);
       if (b.filter) { ctx.fillStyle = D.RES[b.filter].c; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.arc(px + 6, py + 6, 3.5, 0, TAU); ctx.fill(); ctx.stroke(); }
     }
-    if (!NO_ARROW.includes(b.type)) drawArrow(ctx, b);
+    if (!NO_ARROW.includes(D.base(b.type))) drawArrow(ctx, b);
+  }
+
+  // Edificio evolucionado: el mismo dibujo que su base, más grande, con borde dorado y un estandarte.
+  function drawEvolved(ctx, b, isl, t, def) {
+    const base = D.BUILD[def.of], s = def.w / base.w, px = b.x * T, py = b.y * T, w = def.w * T, h = def.h * T;
+    ctx.save();
+    ctx.translate(px, py); ctx.scale(s, s); ctx.translate(-px, -py);
+    drawMachine(ctx, Object.assign({}, b, { type: def.of }), isl, t);
+    ctx.restore();
+    ctx.strokeStyle = '#d4a017'; ctx.lineWidth = 3;
+    rrect(ctx, px + 2, py + 2, w - 4, h - 4, 7); ctx.stroke();
+    ctx.fillStyle = '#5e3b1c'; ctx.fillRect(px + 7, py + 5, 2.5, 22);
+    ctx.fillStyle = '#8e1b1b';
+    ctx.beginPath(); ctx.moveTo(px + 9.5, py + 6); ctx.lineTo(px + 25, py + 6); ctx.lineTo(px + 21, py + 12); ctx.lineTo(px + 25, py + 18); ctx.lineTo(px + 9.5, py + 18); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#f5d76e'; ctx.font = 'bold 10px Georgia'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('★', px + 16, py + 12.5);
+    ctx.textBaseline = 'alphabetic';
   }
 
   function drawTiles(ctx, isl, x0, y0, x1, y1, t) {

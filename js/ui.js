@@ -68,6 +68,12 @@
       const d = D.BUILD[k];
       return `<button data-b="${k}" title="${d.desc}"><b>${d.k}</b><img class="ic" alt="" src="${PV.Island.thumb(k)}">${d.n}<small data-cost="${k}"></small></button>`;
     }).join('');
+    // Con muchos edificios la barra se desplaza con la rueda.
+    bar.addEventListener('wheel', e => {
+      if (bar.scrollWidth <= bar.clientWidth) return;
+      bar.scrollLeft += e.deltaY + e.deltaX;
+      e.preventDefault(); e.stopPropagation();
+    }, { passive: false });
     bar.addEventListener('click', e => {
       const b = e.target.closest('button');
       if (b) PV.Island.select(b.dataset.b);
@@ -108,10 +114,10 @@
       html: opt('', 'Todo', !b.filter) + resOpts(k => b.filter === k) }),
     insertador: b => ({ title: '💪 Estibador: ¿qué agarra?', sub: 'Solo lleva lo que el de adelante acepta.',
       html: opt('', 'Cualquier cosa', !b.filter) + resOpts(k => b.filter === k) }),
-    herreria: b => ({ title: '⚒️ Herrería: receta', sub: '',
-      html: recipeOpts('herreria', b) }),
-    taller: b => ({ title: '🧵 Taller: receta', sub: '',
-      html: recipeOpts('taller', b) }),
+    herreria: b => ({ title: `${D.BUILD[b.type].icon} ${D.BUILD[b.type].n}: receta`, sub: '',
+      html: recipeOpts(b.type, b) }),
+    taller: b => ({ title: `${D.BUILD[b.type].icon} ${D.BUILD[b.type].n}: receta`, sub: '',
+      html: recipeOpts(b.type, b) }),
     muelle: b => ({ title: '⚓ Muelle: al llegar, bajar del barco…', sub: 'Lo que marques se baja solo al almacén una vez, cuando llegás a la isla o desembarcás. Lo que cargues a mano después no se toca. (Lo que traen los senderos al muelle se sube solo al barco.)',
       html: resOpts(k => b.unload.includes(k)), multi: true }),
   };
@@ -120,7 +126,7 @@
     const b = chooseB;
     if (!b) return;
     if (v === '__close') return UI.closeChooser();
-    if (b.type === 'muelle') {
+    if (D.base(b.type) === 'muelle') {
       const i = b.unload.indexOf(v);
       if (i >= 0) b.unload.splice(i, 1); else b.unload.push(v);
       renderChooser();
@@ -138,7 +144,7 @@
   }
 
   function renderChooser() {
-    const c = UI.CHOOSE[chooseB.type](chooseB);
+    const c = UI.CHOOSE[D.base(chooseB.type)](chooseB);
     $('chooser').innerHTML = `<h4>${c.title}</h4>${c.sub ? `<div class="sub">${c.sub}</div>` : ''}<div class="opts ${c.multi || chooseB.recipe === undefined ? 'grid' : ''}">${c.html}</div>
       <button data-v="__close" class="close">Listo</button>`;
   }
@@ -238,7 +244,7 @@
     const lockInv = PV.Tech.lockOf('feature', 'inversiones');
     const inv = lockInv
       ? `<p class="muted">🔒 Investigá «${D.TECH[lockInv].n}» para invertir con riesgo.</p>`
-      : Object.keys(D.BANK.INVEST).map(k => {
+      : Object.keys(D.BANK.INVEST).filter(k => !D.BANK.INVEST[k].big || PV.Bank.big(isl)).map(k => {
           const o = D.BANK.INVEST[k];
           return `<div class="binv"><div><b>${o.icon} ${o.n}</b><div class="sub">${o.desc}<br>${Math.round(o.p * 100)}% de salir bien: +${Math.round(o.win * 100)}% · si sale mal: −${Math.round(o.lose * 100)}% · ${Math.round(o.t / 60)} min</div></div>
             <div>${[100, 500, 2000].map(n => `<button data-act="inv" data-k="${k}" data-n="${n}" ${dob >= n ? '' : 'disabled'}>${U.fmt(n)}</button>`).join('')}</div></div>`;
@@ -248,7 +254,7 @@
       return `<div class="binv run">${o.icon} ${o.n}: <b>${U.fmt(it.amt)}</b> <span class="muted">· vuelve en ${Math.floor(it.t / 60)}:${String(Math.floor(it.t % 60)).padStart(2, '0')}</span></div>`;
     }).join('') : '';
     $('bank').innerHTML = `<div class="rhead"><h2>🏦 Banquero de ${isl.name}</h2><button data-act="close">Cerrar (Esc)</button></div>
-      <p class="muted">Lo guardado acá no se pierde si te hunden y gana <b>${(PV.Bank.rate() * 100).toFixed(1).replace('.', ',')}% por minuto</b> (hasta ${U.fmt(PV.Bank.cap())} doblones). Ojo: los piratas a veces asaltan los bancos.</p>
+      <p class="muted">Lo guardado acá no se pierde si te hunden y gana <b>${(PV.Bank.rate(isl) * 100).toFixed(1).replace('.', ',')}% por minuto</b> (hasta ${U.fmt(PV.Bank.cap(isl))} doblones). Ojo: los piratas a veces asaltan los bancos.</p>
       <div class="bsum"><div><i class="coin"></i> Encima: <b>${U.fmt(dob)}</b></div><div>🏦 Guardado: <b>${U.fmt(saved)}</b></div></div>
       <div class="brow"><span>Depositar</span>${btn('dep', 100, '100', dob >= 100)}${btn('dep', 1000, '1.000', dob >= 1000)}${btn('dep', 'all', 'Todo', dob > 0)}</div>
       <div class="brow"><span>Retirar</span>${btn('wd', 100, '100', saved >= 100)}${btn('wd', 1000, '1.000', saved >= 1000)}${btn('wd', 'all', 'Todo', saved > 0)}</div>
@@ -265,7 +271,7 @@
   UI.renderResearch = function () {
     const r = PV.Tech.st();
     if (!r) return;
-    const hasCarto = PV.state.islands.some(i => i.owned && (i.buildings || []).some(b => b.type === 'cartografo'));
+    const hasCarto = PV.state.islands.some(i => i.owned && (i.buildings || []).some(b => D.base(b.type) === 'cartografo'));
     const cols = D.TECH_LINES.map(L => {
       const cards = Object.keys(D.TECH).filter(id => D.TECH[id].line === L.k).map(id => {
         const t = D.TECH[id], done = PV.Tech.done(id), cur = r.cur === id, ok = PV.Tech.reqOk(id);
@@ -333,6 +339,7 @@
         const k = el.dataset.cost, lock = PV.Tech.buildLocked(k);
         el.innerHTML = lock ? '<span class="cost miss">🔒 investigar</span>' : PV.Inv.costHtml(D.BUILD[k].cost, PV.Island.cur);
         el.parentElement.classList.toggle('locked', !!lock);
+        el.parentElement.classList.toggle('hidden', !!lock && !!D.BUILD[k].of); // las evoluciones aparecen al investigarlas
       });
     }
   };

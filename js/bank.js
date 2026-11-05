@@ -8,11 +8,13 @@
   let raidT = 0;
 
   Bank.of = isl => isl.bank || (isl.bank = { saved: 0, inv: [] });
-  Bank.has = isl => !!(isl && isl.owned && (isl.buildings || []).some(b => b.type === 'banco'));
+  Bank.has = isl => !!(isl && isl.owned && (isl.buildings || []).some(b => D.base(b.type) === 'banco'));
+  Bank.big = isl => !!(isl && (isl.buildings || []).some(b => b.type === 'casa_cambio'));
   Bank.islands = () => PV.state.islands.filter(Bank.has);
   Bank.total = () => PV.state.islands.reduce((t, i) => t + (i.bank ? i.bank.saved : 0), 0);
-  Bank.rate = () => D.BANK.rate * PV.Tech.fx('bankRate');          // por minuto
-  Bank.cap = () => Math.round(D.BANK.cap * PV.Tech.fx('bankCap'));  // interés solo hasta este saldo
+  // Interés por minuto y saldo máximo que da interés (la Casa de cambio mejora los dos).
+  Bank.rate = isl => D.BANK.rate * PV.Tech.fx('bankRate') * (Bank.big(isl) ? 1.5 : 1);
+  Bank.cap = isl => Math.round(D.BANK.cap * PV.Tech.fx('bankCap') * (Bank.big(isl) ? 2 : 1));
 
   Bank.deposit = function (isl, n) {
     const S = PV.state;
@@ -32,7 +34,7 @@
 
   Bank.invest = function (isl, k, n) {
     const S = PV.state, o = D.BANK.INVEST[k];
-    if (PV.Tech.lockOf('feature', 'inversiones')) return;
+    if (PV.Tech.lockOf('feature', 'inversiones') || (o.big && !Bank.big(isl))) return;
     if (S.doblones < n) return PV.UI.toast('No te alcanzan los doblones (se invierte lo que llevás encima).', 'bad');
     S.doblones -= n;
     Bank.of(isl).inv.push({ k, amt: n, t: o.t });
@@ -54,7 +56,7 @@
     const list = Bank.islands();
     for (const isl of list) {
       const b = Bank.of(isl);
-      b.saved += Math.min(b.saved, Bank.cap()) * Bank.rate() * dt / 60;
+      b.saved += Math.min(b.saved, Bank.cap(isl)) * Bank.rate(isl) * dt / 60;
       for (const it of b.inv) it.t -= dt;
       for (const it of b.inv.filter(i => i.t <= 0)) settle(isl, it);
       b.inv = b.inv.filter(i => i.t > 0);
@@ -66,7 +68,7 @@
       for (const isl of list) {
         const b = Bank.of(isl);
         if (b.saved < D.BANK.raidMin || Math.random() > D.BANK.raidChance) continue;
-        const lost = Math.round(b.saved * D.BANK.raidLoss / PV.Tech.fx('vault'));
+        const lost = Math.round(b.saved * D.BANK.raidLoss / PV.Tech.fx('vault') / (Bank.big(isl) ? 2 : 1));
         b.saved -= lost;
         PV.UI.toast(`🏴‍☠️ ¡Piratas asaltaron el banco de ${isl.name} y se llevaron ${U.fmt(lost)} doblones!`, 'bad');
       }

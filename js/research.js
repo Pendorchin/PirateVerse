@@ -38,12 +38,12 @@
   Tech.lockOf = function (kind, val) {
     for (const id in D.TECH) {
       const u = D.TECH[id].unlock;
-      if (u && u[kind] === val && !Tech.done(id)) return id;
+      if (u && [].concat(u[kind]).includes(val) && !Tech.done(id)) return id;
     }
     return null;
   };
   Tech.buildLocked = type => Tech.lockOf('build', type);
-  Tech.recipeLocked = (type, r) => Tech.lockOf('recipe', type + '.' + r);
+  Tech.recipeLocked = (type, r) => Tech.lockOf('recipe', D.base(type) + '.' + r);
 
   // Cuánto falta de un recurso para la investigación actual.
   Tech.need = function (k) {
@@ -62,7 +62,7 @@
 
   function cartografos() {
     const out = [];
-    for (const isl of PV.state.islands) if (isl.owned && isl.buildings) for (const b of isl.buildings) if (b.type === 'cartografo') out.push([isl, b]);
+    for (const isl of PV.state.islands) if (isl.owned && isl.buildings) for (const b of isl.buildings) if (D.base(b.type) === 'cartografo') out.push([isl, b]);
     return out;
   }
 
@@ -112,7 +112,7 @@
       for (const id in D.TECH) {
         const u = D.TECH[id].unlock;
         if (!u) continue;
-        if (u.build === b.type || (b.recipe && u.recipe === b.type + '.' + b.recipe)) {
+        if ([].concat(u.build).includes(b.type) || (b.recipe && u.recipe === D.base(b.type) + '.' + b.recipe)) {
           r.done[id] = true;
           for (const q of D.TECH[id].req || []) r.done[q] = true;
         }

@@ -32,6 +32,9 @@
     polvora:        { n: 'Pólvora',           c: '#3a3a3a', p: 30 },
     balas:          { n: 'Balas de hierro',   c: '#4a4f55', p: 8 },
     bala_explosiva: { n: 'Bala explosiva',    c: '#c0392b', p: 30 },
+    acero:          { n: 'Acero',             c: '#5d6d7e', p: 110 },
+    canon_bronce:   { n: 'Cañón de bronce',   c: '#a0662a', p: 320 },
+    velamen:        { n: 'Velamen',           c: '#fbf6e9', p: 130 },
   };
 
   // Niveles de isla: más lejos del inicio = más raro y más peligroso.
@@ -77,8 +80,37 @@
   D.EXTRACT_RATE = 0.5;   // objetos por segundo
   D.STORAGE_PER = 200;    // capacidad por almacén
   D.DOCK_CAP = 300;       // capacidad de cada muelle
+  // Evoluciones: edificios más grandes que funcionan como su base (of) pero mejor.
+  //   spd: velocidad, slots: cuántos almacenes cuenta, capMul: capacidad del muelle,
+  //   bonus: lo especial de cada uno (se explica en desc).
+  const EVO = {
+    mina_profunda:  { of: 'extractor',   n: 'Mina profunda',        icon: '⛏️', w: 4, h: 4, spd: 2.2, cost: { doblones: 400, tablones: 40, lingote_hierro: 20 },
+                      desc: 'Mina grande: cubre más yacimiento, trabaja el doble y a veces encuentra plata.' },
+    campamento:     { of: 'lenadores',   n: 'Campamento maderero',  icon: '🪓', w: 4, h: 4, spd: 2.2, cost: { doblones: 350, tablones: 60, lingote_hierro: 10 },
+                      desc: 'Leñadores que replantan: trabajan el doble y el bosque nunca se agota.' },
+    alto_horno:     { of: 'fundicion',   n: 'Alto horno',           icon: '🔥', w: 4, h: 4, spd: 2,   cost: { doblones: 600, piedra: 80, placa_hierro: 10 },
+                      desc: 'Funde el doble de rápido y convierte lingotes de hierro en acero.' },
+    aserradero_hid: { of: 'aserradero',  n: 'Aserradero hidráulico', icon: '🪵', w: 4, h: 4, spd: 2.5, cost: { doblones: 450, tablones: 40, lingote_hierro: 15 },
+                      desc: 'Rueda de agua: corta más rápido y saca 3 tablones por madera.' },
+    gran_herreria:  { of: 'herreria',    n: 'Gran herrería',        icon: '⚒️', w: 4, h: 4, spd: 2,   cost: { doblones: 800, piedra: 40, acero: 10 },
+                      desc: 'Trabaja el doble y puede fundir cañones de bronce.' },
+    gran_taller:    { of: 'taller',      n: 'Gran taller',          icon: '🧵', w: 4, h: 4, spd: 2,   cost: { doblones: 700, tablones: 60, bronce: 15 },
+                      desc: 'Trabaja el doble y cose velamen para barcos.' },
+    deposito:       { of: 'almacen',     n: 'Depósito',             icon: '🏚️', w: 3, h: 3, slots: 4, cost: { doblones: 300, tablones: 60, piedra: 40 },
+                      desc: 'Guarda como 4 almacenes en el espacio de 2.' },
+    puerto_propio:  { of: 'muelle',      n: 'Puerto propio',        icon: '⚓', w: 3, h: 3, capMul: 3, cost: { doblones: 500, tablones: 80, lingote_hierro: 15 },
+                      desc: 'Muelle grande (3 veces más carga). Además repara tu barco gratis cuando llegás.' },
+    academia:       { of: 'cartografo',  n: 'Academia',             icon: '🧭', w: 3, h: 3, spd: 3,   cost: { doblones: 500, tablones: 50, lingote_plata: 5 },
+                      desc: 'Muchos cartógrafos juntos: investiga 3 veces más rápido.' },
+    casa_cambio:    { of: 'banco',       n: 'Casa de cambio',       icon: '🏦', w: 3, h: 3, cost: { doblones: 1500, piedra: 60, lingote_oro: 5 },
+                      desc: 'Banco grande: +50% de interés, guarda el doble con interés, los asaltos se llevan la mitad y permite invertir en la Compañía de Indias.' },
+  };
+  for (const k in EVO) D.BUILD[k] = Object.assign({ key: '', k: '★' }, EVO[k]);
+  D.base = t => (D.BUILD[t] && D.BUILD[t].of) || t;
+
   D.SMELT = { cobre: 'lingote_cobre', hierro: 'lingote_hierro', plata: 'lingote_plata', oro: 'lingote_oro', estano: 'lingote_estano' };
   D.FUEL = { madera: 1, carbon: 2 };
+  D.SMELT_BIG = { lingote_hierro: 'acero' }; // solo en el Alto horno
 
   // Recetas de los talleres. t: segundos por tanda, n: cuántos salen.
   D.RECIPES = {
@@ -93,6 +125,12 @@
       bala_explosiva: { in: { balas: 2, polvora: 1 }, out: 'bala_explosiva', n: 2, t: 3 },
     },
   };
+  D.RECIPES.gran_herreria = Object.assign({}, D.RECIPES.herreria, {
+    canon_bronce: { in: { bronce: 4, acero: 1 }, out: 'canon_bronce', n: 1, t: 6 },
+  });
+  D.RECIPES.gran_taller = Object.assign({}, D.RECIPES.taller, {
+    velamen: { in: { lona: 3, tablones: 2 }, out: 'velamen', n: 1, t: 4 },
+  });
 
   // ---------- Investigación ----------
   // El Cartógrafo estudia los materiales de a uno: RESEARCH_T segundos por objeto.
@@ -103,6 +141,7 @@
     { k: 'prod', n: 'Producción', icon: '⛏️' },
     { k: 'unl', n: 'Desbloqueos', icon: '🔓' },
     { k: 'nav', n: 'Navegación', icon: '⛵' },
+    { k: 'evo', n: 'Evoluciones', icon: '🏗️' },
   ];
   // fx: efectos. Los de ADD se suman; el resto se multiplica.
   //   ins (velocidad del estibador), carry (cuánto lleva por viaje), belt (porteadores),
@@ -118,6 +157,7 @@
     raidEvery: 480, raidChance: 0.3, raidMin: 500, raidLoss: 0.12,
     // p: chance de salir bien, win/lose: cuánto gana o pierde sobre lo invertido. t: segundos.
     INVEST: {
+      indias:     { n: 'Compañía de Indias',  icon: '🏛️', t: 600, p: 0.7, win: 1.0, lose: 0.3, desc: 'Solo con Casa de cambio. Larga, pero rinde mucho.', big: true },
       ruta:       { n: 'Ruta comercial',      icon: '🚢', t: 240, p: 0.75, win: 0.35, lose: 0.15, desc: 'Segura: casi siempre gana un poco.' },
       expedicion: { n: 'Expedición del tesoro', icon: '🗺️', t: 420, p: 0.45, win: 1.3, lose: 0.5,  desc: 'Puede duplicar lo invertido… o perder la mitad.' },
       contrabando:{ n: 'Contrabando',         icon: '🏴‍☠️', t: 180, p: 0.6, win: 0.7, lose: 1,    desc: 'Rápido y jugoso, pero si la Marina lo agarra se pierde todo.' },
@@ -151,6 +191,14 @@
     inversiones:{ line: 'nav', n: 'Inversiones', desc: 'El Banquero acepta inversiones con riesgo: rutas, expediciones y contrabando.', req: ['banca'], cost: { lingote_hierro: 15, lingote_cobre: 20 }, unlock: { feature: 'inversiones' } },
     prestamistas:{ line: 'nav', n: 'Prestamistas', desc: 'Interés al doble (1% por minuto) y hasta 15.000 doblones.', req: ['banca'], cost: { lingote_plata: 15, bronce: 10 }, fx: { bankRate: 2, bankCap: 5 } },
     boveda:   { line: 'nav', n: 'Bóveda reforzada', desc: 'Los asaltos piratas al banco se llevan la mitad.', req: ['banca'], cost: { placa_hierro: 15, piedra: 60 }, fx: { vault: 2 } },
+    evo_minas:   { line: 'evo', n: 'Minas profundas', desc: 'Desbloquea la Mina profunda y el Campamento maderero (4x4).', req: ['mineros1'], cost: { lingote_hierro: 30, tablones: 40 }, unlock: { build: ['mina_profunda', 'campamento'] } },
+    evo_horno:   { line: 'evo', n: 'Alto horno', desc: 'Desbloquea el Alto horno (4x4): más rápido y hace acero.', req: ['fab1'], cost: { placa_hierro: 15, piedra: 80 }, unlock: { build: 'alto_horno' } },
+    evo_sierra:  { line: 'evo', n: 'Rueda de agua', desc: 'Desbloquea el Aserradero hidráulico (4x4): 3 tablones por madera.', req: ['fab1'], cost: { lingote_hierro: 15, tablones: 60 }, unlock: { build: 'aserradero_hid' } },
+    evo_herreria:{ line: 'evo', n: 'Gran herrería', desc: 'Desbloquea la Gran herrería (4x4): cañones de bronce.', req: ['herreria', 'evo_horno'], cost: { bronce: 20, acero: 10 }, unlock: { build: 'gran_herreria' } },
+    evo_taller:  { line: 'evo', n: 'Gran taller', desc: 'Desbloquea el Gran taller (4x4): velamen.', req: ['taller'], cost: { bronce: 20, lona: 20 }, unlock: { build: 'gran_taller' } },
+    evo_deposito:{ line: 'evo', n: 'Depósitos y puertos', desc: 'Desbloquea el Depósito y el Puerto propio (3x3).', req: ['bodegas'], cost: { tablones: 80, lingote_hierro: 20 }, unlock: { build: ['deposito', 'puerto_propio'] } },
+    evo_academia:{ line: 'evo', n: 'Academia', desc: 'Desbloquea la Academia (3x3): investiga 3 veces más rápido.', cost: { lingote_plata: 10, tablones: 50 }, unlock: { build: 'academia' } },
+    evo_banco:   { line: 'evo', n: 'Casa de cambio', desc: 'Desbloquea la Casa de cambio (3x3): banco mejorado.', req: ['banca'], cost: { lingote_oro: 10, lingote_plata: 10 }, unlock: { build: 'casa_cambio' } },
     contactos:{ line: 'nav', n: 'Contactos en el puerto', desc: 'Otro 10% más en las ventas.', req: ['regateo'], cost: { lingote_plata: 10 }, fx: { sell: 1.1 } },
   };
 
