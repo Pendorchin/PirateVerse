@@ -273,11 +273,64 @@
     }
   }
 
+  // ---------- Avisos de edificios trabados ----------
+  // Devuelve { ic, msg, lvl } si el edificio no puede trabajar, o null.
+  // lvl: 'wait' = espera material, 'stuck' = no puede sacar lo que hizo, 'dead' = agotado / lleno.
+
+  function outBlocked(isl, b) {
+    const [fx, fy] = frontTile(b), t = occAt(isl, fx, fy), it = D.RES[b.out[0]].n;
+    if (!t || t === b) return { ic: '➡️', lvl: 'stuck', msg: `No tiene adónde mandar ${it}: poné un sendero o un almacén donde apunta la flecha.` };
+    if (t.type === 'cinta') return { ic: '🚧', lvl: 'stuck', msg: `El sendero de adelante está lleno: la carga no avanza.` };
+    return { ic: '🚧', lvl: 'stuck', msg: `${D.BUILD[t.type].n} no recibe ${it} (está lleno o no lo usa).` };
+  }
+
+  const missing = (have, need) => Object.keys(need).filter(k => (have[k] || 0) < need[k]).map(k => D.RES[k].n);
+
+  function stuckReason(isl, b) {
+    switch (b.type) {
+      case 'extractor': case 'lenadores':
+        if (b.out.length) return outBlocked(isl, b);
+        if (b.empty) return { ic: '⛔', lvl: 'dead', msg: 'Yacimiento agotado: quitalo y ponelo sobre otro.' };
+        return null;
+      case 'fundicion':
+        if (b.out.length >= 3) return outBlocked(isl, b);
+        if (b.oreN < 2) return { ic: '💤', lvl: 'wait', msg: 'Falta mineral (necesita 2 del mismo tipo).' };
+        if (b.fuel < 1) return { ic: '💤', lvl: 'wait', msg: 'Falta combustible: madera o carbón.' };
+        return null;
+      case 'aserradero':
+        if (b.out.length >= 4) return outBlocked(isl, b);
+        if (b.n < 1) return { ic: '💤', lvl: 'wait', msg: 'Falta madera: mandásela por un sendero.' };
+        return null;
+      case 'herreria': case 'taller': {
+        if (b.out.length >= 4) return outBlocked(isl, b);
+        const m = missing(b.inv, D.RECIPES[b.type][b.recipe].in);
+        return m.length ? { ic: '💤', lvl: 'wait', msg: 'Falta: ' + m.join(', ') + '.' } : null;
+      }
+      case 'almacen':
+        return PV.Inv.storageTotal(isl) >= PV.Inv.storageCap(isl) ? { ic: '⛔', lvl: 'dead', msg: 'Almacén lleno: cargá el barco o poné otro almacén.' } : null;
+      case 'muelle':
+        return PV.Inv.sum(b.store) >= D.DOCK_CAP ? { ic: '⛔', lvl: 'dead', msg: 'Muelle lleno: pasá con el barco o con un mercante.' } : null;
+      case 'clasificador':
+        return b.hold ? { ic: '🚧', lvl: 'stuck', msg: `No tiene por dónde mandar ${D.RES[b.hold].n}.` } : null;
+      case 'insertador':
+        return b.hand && b.prog >= 1 ? { ic: '🚧', lvl: 'stuck', msg: `No puede dejar ${D.RES[b.hand].n}: lo de adelante no lo recibe.` } : null;
+    }
+    return null;
+  }
+  Isl.stuckReason = stuckReason;
+
   Isl.updateAll = function (dt) {
     for (const isl of PV.state.islands) {
       if (!isl.owned || !isl.grid || !isl.buildings.length) continue;
       if (!isl._occ) Isl.rebuildOcc(isl);
       for (const b of isl.buildings) updateBuilding(isl, b, dt);
+      if (isl !== Isl.cur) continue;
+      // Solo se avisa si sigue trabado un rato, para que no parpadee.
+      for (const b of isl.buildings) {
+        const r = b.type === 'cinta' ? null : stuckReason(isl, b);
+        b._stuckT = r ? (b._stuckT || 0) + dt : 0;
+        b._warn = r && b._stuckT > 1.5 ? r : null;
+      }
     }
   };
 
@@ -516,10 +569,10 @@
     if (b) {
       const def = D.BUILD[b.type];
       let s = `<b>${def.icon} ${def.n}</b><br>`;
+      if (b._warn) s += `<span style="color:${b._warn.lvl === 'wait' ? '#f1c40f' : '#ff7b6b'}">${b._warn.ic} ${b._warn.msg}</span><br>`;
       if (DIGGERS[b.type]) {
         const tot = resUnder(isl, b), keys = Object.keys(tot);
         s += keys.length ? keys.map(k => `${D.RES[k].n}: quedan ${tot[k]}`).join('<br>') : '<span style="color:#e74c3c">Yacimiento agotado</span>';
-        if (b.out.length) s += '<br><i>Esperando: poné un sendero o un almacén en la flecha.</i>';
       } else if (b.type === 'fundicion') {
         s += `Mineral: ${b.oreN ? D.RES[b.ore].n + ' ×' + b.oreN : '—'}<br>Combustible: ${b.fuel}`;
         s += b.on ? '<br>🔥 Fundiendo…' : '<br><i>Necesita 2 minerales y combustible (madera o carbón).</i>';
@@ -555,6 +608,21 @@
     ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
     ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
+  }
+
+  // Globito con ícono sobre un edificio trabado.
+  const WARN_COL = { wait: '#f1c40f', stuck: '#e67e22', dead: '#e74c3c' };
+  function drawWarn(ctx, b, t) {
+    const def = D.BUILD[b.type];
+    const x = (b.x + def.w / 2) * T, y = b.y * T + 2 + Math.sin(t * 3 + b.id) * 2;
+    const r = def.w === 1 ? 8 : 11;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.arc(x + 1, y + 2, r, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#fdf3dc'; ctx.strokeStyle = WARN_COL[b._warn.lvl]; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.font = (r * 1.15 | 0) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(b._warn.ic, x, y + 1);
+    ctx.restore();
   }
 
   function drawArrow(ctx, b) {
@@ -872,6 +940,7 @@
       for (const it of b.items) drawPorter(ctx, b.x * T + T / 2 + dx * (it.p - 0.5) * T, b.y * T + T / 2 + dy * (it.p - 0.5) * T, b.dir, it.t, t);
     }
     for (const b of isl.buildings) if (b.type !== 'cinta') drawMachine(ctx, b, isl, t);
+    for (const b of isl.buildings) if (b._warn) drawWarn(ctx, b, t);
 
     // Fantasma del edificio a colocar
     if (Isl.sel && Isl.hover) {
