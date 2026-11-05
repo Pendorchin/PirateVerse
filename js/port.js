@@ -83,11 +83,55 @@
     if (bought) PV.UI.toast(`Compraste ${bought} ${D.RES[k].n} por ${spent} doblones`, 'good');
   }
 
+  // Materiales ya entregados al astillero para la próxima mejora de cada parte.
+  // Se pueden llevar en varios viajes; se guardan aunque zarpes.
+  function dep(key) {
+    const S = PV.state;
+    S.ship.dep = S.ship.dep || {};
+    return S.ship.dep[key] = S.ship.dep[key] || {};
+  }
+  function matsLeft(key, cost) {
+    const d = dep(key), left = {};
+    for (const k in cost) if (k !== 'doblones' && (d[k] || 0) < cost[k]) left[k] = cost[k] - (d[k] || 0);
+    return left;
+  }
+  function canDeliver(key, cost) {
+    const left = matsLeft(key, cost), cargo = PV.state.ship.cargo;
+    return Object.keys(left).some(k => cargo[k] > 0);
+  }
+
+  // ¿Alcanza lo entregado + lo que hay en la bodega para completar los materiales?
+  function matsReady(key, cost) {
+    const left = matsLeft(key, cost), cargo = PV.state.ship.cargo;
+    return Object.keys(left).every(k => (cargo[k] || 0) >= left[k]);
+  }
+
+  function deliver(key, quiet) {
+    const S = PV.state, next = D.UP[key].lv[S.ship.up[key] + 1];
+    if (!next) return;
+    const left = matsLeft(key, next.cost), d = dep(key);
+    let n = 0;
+    for (const k in left) {
+      const a = Math.min(left[k], S.ship.cargo[k] || 0);
+      if (!a) continue;
+      PV.Inv.add(S.ship.cargo, k, -a);
+      d[k] = (d[k] || 0) + a; n += a;
+    }
+    if (quiet) return;
+    if (!n) return PV.UI.toast('No llevás ninguno de los materiales que faltan.', 'bad');
+    const faltan = Object.keys(matsLeft(key, next.cost)).length;
+    PV.UI.toast(faltan ? `Entregaste ${n} materiales. Traé el resto en otro viaje.` : 'Materiales completos: ya podés mejorar.', 'good');
+  }
+
   function upgrade(key) {
     const S = PV.state, up = D.UP[key], lv = S.ship.up[key], next = up.lv[lv + 1];
-    if (!next || !PV.Inv.canPay(next.cost, null)) return;
+    if (!next) return;
+    if (!matsReady(key, next.cost)) return PV.UI.toast('Todavía faltan materiales.', 'bad');
+    if (S.doblones < (next.cost.doblones || 0)) return PV.UI.toast('No te alcanzan los doblones.', 'bad');
+    deliver(key, true); // lo que falta y está en la bodega se entrega al mejorar
     const oldMax = PV.Sea.stats().maxHp;
-    PV.Inv.pay(next.cost, null);
+    S.doblones -= next.cost.doblones || 0;
+    delete S.ship.dep[key];
     S.ship.up[key]++;
     if (key === 'casco') S.ship.hp += PV.Sea.stats().maxHp - oldMax;
     PV.UI.toast(`¡${up.n} mejorada a nivel ${lv + 2}!`, 'good');
@@ -111,6 +155,7 @@
     else if (a === 'sellall') sellCargo();
     else if (a === 'buy') buy(el.dataset.k, +el.dataset.n);
     else if (a === 'up') upgrade(el.dataset.k);
+    else if (a === 'dep') deliver(el.dataset.k);
     else if (a === 'buyship') PV.Fleet.buy(Port.isl);
     else if (a === 'fhome' || a === 'fport') PV.Fleet.cycle(+el.dataset.i, a === 'fhome' ? 'home' : 'port');
     else if (a === 'repair') repair();
@@ -140,6 +185,16 @@
       <table class="market"><tr><th>Recurso</th><th>En bodega</th><th>Te pagan</th><th></th><th>Cuesta</th><th></th></tr>${rows}</table>`;
   }
 
+  // Costo con progreso: "30/40 Tablones" (verde si está completo, y cuánto traés en la bodega).
+  function depHtml(key, cost) {
+    const d = dep(key), cargo = PV.state.ship.cargo;
+    return Object.keys(cost).map(k => {
+      if (k === 'doblones') return `<span class="cost ${PV.state.doblones >= cost[k] ? '' : 'miss'}">${cost[k]} <i class="coin"></i></span>`;
+      const got = d[k] || 0, ok = got >= cost[k], c = cargo[k] || 0;
+      return `<span class="cost ${ok ? '' : 'miss'}">${got}/${cost[k]} ${D.RES[k].n}${!ok && c ? ` <small>(+${Math.min(c, cost[k] - got)} en bodega)</small>` : ''}</span>`;
+    }).join(' ');
+  }
+
   function shipyardHtml() {
     const S = PV.state, sc = PV.Spr.shipClass(S.ship.up);
     const shipImg = c => `<img class="shipart" src="${PV.Spr.src(c.img)}" alt="${c.n}">`;
@@ -148,13 +203,14 @@
         ${sc.next ? `<div class="arrow">→</div><div class="shipcard dim">${shipImg(sc.next)}<div><b>${sc.next.n}</b>
           <div class="sub">Faltan ${sc.next.min - sc.lv} mejoras</div></div></div>` : '<div class="sub">¡El barco más grande del archipiélago!</div>'}
       </div>`;
-    return hero + `<p class="muted">Las mejoras se pagan con doblones y con materiales que tengas en la bodega del barco.</p>` +
+    return hero + `<p class="muted">Los materiales se entregan de a poco: traelos en la bodega, tocá <b>Entregar</b> y quedan guardados en el astillero hasta completar la mejora.</p>` +
       Object.keys(D.UP).map(k => {
         const up = D.UP[k], lv = S.ship.up[k], cur = up.lv[lv], next = up.lv[lv + 1];
         const pips = up.lv.map((_, i) => `<i class="${i <= lv ? 'on' : ''}"></i>`).join('');
         const right = next
-          ? `<div style="text-align:right"><div>→ ${up.fmt(next)}</div><div style="font-size:12px;margin:3px 0">${PV.Inv.costHtml(next.cost, null)}</div>
-             <button class="primary" data-act="up" data-k="${k}" ${PV.Inv.canPay(next.cost, null) ? '' : 'disabled'}>Mejorar</button></div>`
+          ? `<div style="text-align:right"><div>→ ${up.fmt(next)}</div><div style="font-size:12px;margin:3px 0">${depHtml(k, next.cost)}</div>
+             <button data-act="dep" data-k="${k}" ${canDeliver(k, next.cost) ? '' : 'disabled'}>Entregar</button>
+             <button class="primary" data-act="up" data-k="${k}" ${matsReady(k, next.cost) && S.doblones >= (next.cost.doblones || 0) ? '' : 'disabled'}>Mejorar</button></div>`
           : '<b>Nivel máximo</b>';
         return `<div class="upg"><div class="ic">${up.icon}</div>
           <div><h4>${up.n} <span class="lvl">${pips}</span></h4><div class="sub">${up.desc}: ${up.fmt(cur)}</div></div>${right}</div>`;
