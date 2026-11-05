@@ -110,8 +110,14 @@
   }
 
   function shipyardHtml() {
-    const S = PV.state;
-    return `<p class="muted">Las mejoras se pagan con doblones y con materiales que tengas en la bodega del barco.</p>` +
+    const S = PV.state, sc = PV.Spr.shipClass(S.ship.up);
+    const shipImg = c => `<img class="shipart" src="${PV.Spr.src(c.img)}" alt="${c.n}">`;
+    const hero = `<div class="shipclass">
+        <div class="shipcard">${shipImg(sc.cur)}<div><b>${sc.cur.n}</b><div class="sub">Tu barco · ${sc.lv} mejoras</div></div></div>
+        ${sc.next ? `<div class="arrow">→</div><div class="shipcard dim">${shipImg(sc.next)}<div><b>${sc.next.n}</b>
+          <div class="sub">Faltan ${sc.next.min - sc.lv} mejoras</div></div></div>` : '<div class="sub">¡El barco más grande del archipiélago!</div>'}
+      </div>`;
+    return hero + `<p class="muted">Las mejoras se pagan con doblones y con materiales que tengas en la bodega del barco.</p>` +
       Object.keys(D.UP).map(k => {
         const up = D.UP[k], lv = S.ship.up[k], cur = up.lv[lv], next = up.lv[lv + 1];
         const pips = up.lv.map((_, i) => `<i class="${i <= lv ? 'on' : ''}"></i>`).join('');

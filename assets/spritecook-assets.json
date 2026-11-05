@@ -1,0 +1,10 @@
+{
+  "assets": [
+    { "asset_id": "1d79c441-4fad-4e4b-af68-bc5e27c7fe7b", "file": "sprites/barcos_hoja.png", "label": "Grilla 1: barcos (de costado), torres, muelle, fuerte, bandera, naufragio" },
+    { "asset_id": "ea02bb27-9ffb-45fe-ae0e-a6dd3b9b5fcb", "file": "sprites/barcos_cenital.png", "label": "Grilla 2: 9 barcos de costado (balandra a galeón, piratas, marina, fantasma) + bote cenital" }
+  ],
+  "slices": {
+    "sprites/barcos_hoja.png": ["(barco)", "(barco)", "(barco)", "torre", "torre_rota", "muelle", "fuerte", "bandera", "naufragio"],
+    "sprites/barcos_cenital.png": ["barco_balandra", "barco_pirata", "barco_mercante", "barco_bergantin", "barco_bergantin_pirata", "barco_marina", "barco_bote", "barco_galeon", "barco_fantasma"]
+  }
+}

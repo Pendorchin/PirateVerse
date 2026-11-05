@@ -19,7 +19,7 @@
   };
 
   Sea.init = function () {
-    Sea.enemies = []; Sea.bullets = []; Sea.parts = []; Sea.texts = [];
+    Sea.enemies = []; Sea.bullets = []; Sea.parts = []; Sea.texts = []; Sea.wrecks = [];
     for (const isl of PV.state.islands) {
       if (isl.owned || isl.port) continue;
       const n = D.TIERS[isl.tier].guards;
@@ -96,6 +96,11 @@
       puff(x, y, Math.cos(a) * s, Math.sin(a) * s, i % 3 ? 'rgba(255,150,40,0.95)' : 'rgba(70,70,70,0.8)', 0.4 + Math.random() * 0.5, 4 + Math.random() * 5);
     }
   }
+  function addWreck(x, y) {
+    Sea.wrecks.push({ x, y, life: 45 });
+    if (Sea.wrecks.length > 12) Sea.wrecks.shift();
+  }
+
   function floatText(x, y, t, c) { Sea.texts.push({ x, y, t, c, life: 1.1 }); }
 
   // ---------- Combate ----------
@@ -146,6 +151,7 @@
     floatText(e.x, e.y - 18, '-' + dmg, '#ffcc66');
     if (e.hp <= 0) {
       explosion(e.x, e.y, 30);
+      addWreck(e.x, e.y);
       Sea.enemies.splice(Sea.enemies.indexOf(e), 1);
       loot(e.tier, e.x, e.y);
       PV.UI.toast('¡Barco pirata hundido!', 'good');
@@ -183,6 +189,7 @@
       sh.sunk = 3;
       sh.v = 0;
       explosion(sh.x, sh.y, 50);
+      addWreck(sh.x, sh.y);
       sh.cargo = {};
       S.doblones = Math.floor(S.doblones * 0.75);
       PV.UI.toast('¡Te hundieron! Perdiste la carga y parte del oro. Volvés a Isla Refugio…', 'bad');
@@ -343,6 +350,7 @@
   }
 
   function updateFx(dt) {
+    for (let i = Sea.wrecks.length - 1; i >= 0; i--) if ((Sea.wrecks[i].life -= dt) <= 0) Sea.wrecks.splice(i, 1);
     for (let i = Sea.parts.length - 1; i >= 0; i--) {
       const p = Sea.parts[i];
       p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.96; p.vy *= 0.96; p.life -= dt;
@@ -446,10 +454,12 @@
     const r = U.rng(isl.id * 31 + 7);
     // Muelle hacia el este
     const a = 0, cr = Wd.radius(isl, a);
+    if (PV.Spr.draw(ctx, 'muelle', isl.x + cr + 14, isl.y + 30, 1.6)) { /* sprite */ } else {
     ctx.fillStyle = '#7a5230';
     ctx.fillRect(isl.x + cr - 20, isl.y - 5, 60, 10);
     ctx.fillStyle = '#5a3a1e';
     for (let i = 0; i < 6; i++) ctx.fillRect(isl.x + cr - 18 + i * 10, isl.y - 5, 2, 10);
+    }
     const roofs = ['#b03a2e', '#a04000', '#7d3c98', '#2471a3', '#b9770e'];
     for (let i = 0; i < 9; i++) {
       const hx = isl.x + U.range(r, -50, 45), hy = isl.y + U.range(r, -45, 45);
@@ -474,7 +484,12 @@
     }
 
     if (isl.port) drawTown(ctx, isl);
-    if (isl.owned) drawFlag(ctx, isl.x, isl.y, t, isl.home ? '#1e8449' : '#c0392b');
+    if (isl.owned) {
+      if (PV.Spr.draw(ctx, 'fuerte', isl.x, isl.y + 22, 1.5)) drawFlag(ctx, isl.x + 4, isl.y - 40, t, isl.home ? '#1e8449' : '#c0392b');
+      else drawFlag(ctx, isl.x, isl.y, t, isl.home ? '#1e8449' : '#c0392b');
+    } else if (!isl.port && (Sea.towersAlive(isl) || Sea.guardsAlive(isl))) {
+      PV.Spr.draw(ctx, 'bandera', isl.x, isl.y + 14, 1.3);
+    }
     if (isl.owned && isl.buildings.length) {
       // Humito de la fábrica para mostrar que la isla produce
       ctx.fillStyle = 'rgba(80,80,80,0.35)';
@@ -501,15 +516,24 @@
 
   function drawTower(ctx, tw, sh) {
     if (tw.hp <= 0) {
+      if (PV.Spr.draw(ctx, 'torre_rota', tw.x, tw.y + 16, 1.1)) return;
       ctx.fillStyle = '#4d4d4d'; ctx.beginPath(); ctx.arc(tw.x, tw.y, 13, 0, TAU); ctx.fill();
       ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(tw.x + 4, tw.y - 3, 5, 0, TAU); ctx.fill();
+      return;
+    }
+    const a = Math.atan2(sh.y - tw.y, sh.x - tw.x);
+    if (PV.Spr.draw(ctx, 'torre', tw.x, tw.y + 18, 1.2)) {
+      // Cañón asomando arriba de la torre, apuntando al jugador
+      ctx.save(); ctx.translate(tw.x, tw.y - 30); ctx.rotate(a);
+      ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, -3, 16, 6);
+      ctx.restore();
+      if (tw.hp < tw.max) hpBar(ctx, tw.x, tw.y - 50, tw.hp / tw.max);
       return;
     }
     ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.arc(tw.x + 3, tw.y + 4, 17, 0, TAU); ctx.fill();
     ctx.fillStyle = '#8a8a8a'; ctx.beginPath(); ctx.arc(tw.x, tw.y, 17, 0, TAU); ctx.fill();
     ctx.strokeStyle = '#5d5d5d'; ctx.lineWidth = 3; ctx.stroke();
     ctx.fillStyle = '#6e6e6e'; ctx.beginPath(); ctx.arc(tw.x, tw.y, 9, 0, TAU); ctx.fill();
-    const a = Math.atan2(sh.y - tw.y, sh.x - tw.x);
     ctx.save(); ctx.translate(tw.x, tw.y); ctx.rotate(a);
     ctx.fillStyle = '#222'; ctx.fillRect(0, -3.5, 20, 7);
     ctx.restore();
@@ -650,6 +674,8 @@
     const vis = S.islands.filter(i => i.x + i.R * 1.5 > x0 && i.x - i.R * 1.5 < x1 && i.y + i.R * 1.5 > y0 && i.y - i.R * 1.5 < y1);
     for (const isl of vis) drawIsland(ctx, isl, t);
     for (const isl of vis) for (const tw of isl.towers) if (!isl.owned) drawTower(ctx, tw, sh);
+
+    for (const w of Sea.wrecks) PV.Spr.draw(ctx, 'naufragio', w.x, w.y + 18, 1.1, Math.min(1, w.life / 5) * 0.9);
 
     for (const p of Sea.parts) {
       ctx.globalAlpha = Math.max(0, p.life / p.max);
