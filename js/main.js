@@ -41,7 +41,7 @@
     PV.setScene('sea');
     PV.Save.save();
     PV.UI.toast('¡Bienvenido, capitán! Acercate a Isla Refugio y apretá F para desembarcar.', 'good');
-    setTimeout(() => PV.UI.toast('Abrí minas sobre los yacimientos y trazá senderos hasta un almacén: tus porteadores llevan la carga.'), 4000);
+    setTimeout(() => PV.UI.toast('Poné leñadores en los árboles y minas en las piedras, y trazá senderos hasta un almacén: tus porteadores llevan la carga.'), 4000);
     setTimeout(() => PV.UI.toast('Vendé en los puertos ⚓ y mejorá tu barco para llegar a islas más raras.'), 8000);
   };
 
@@ -50,7 +50,7 @@
     if (!s) return;
     PV.state = s;
     for (const isl of s.islands) {
-      if (isl.grid) PV.Island.rebuildOcc(isl);
+      if (isl.grid) { PV.Island.migrate(isl); PV.Island.rebuildOcc(isl); }
       // Partidas viejas: precios para los recursos nuevos.
       if (isl.port) for (const k in PV.D.RES) if (!isl.market[k]) isl.market[k] = { m: 1, f: 1 };
     }

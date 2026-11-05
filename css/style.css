@@ -107,6 +107,10 @@ kbd {
 #buildbar button .ic { width: 40px; height: 40px; image-rendering: auto; margin: 2px 0; }
 #buildbar button small { font-size: 11px; }
 
+.invrows { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 8px; }
+.invrow { display: grid; grid-template-columns: 10px 1fr auto auto auto; gap: 5px; align-items: center; font-size: 12px; }
+.invrow i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(0,0,0,.4); }
+.invrow button { font-size: 11px; padding: 1px 5px; }
 #chooser { position: fixed; z-index: 30; width: 320px; padding: 10px 12px; max-height: 70vh; overflow: auto; }
 #chooser h4 { margin: 0 0 4px; font-family: 'Pirata One', Georgia, serif; font-size: 20px; font-weight: normal; }
 #chooser .sub { font-size: 12px; opacity: .75; margin-bottom: 6px; }

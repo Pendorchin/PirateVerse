@@ -34,6 +34,10 @@
   function occAt(isl, x, y) { return inside(isl, x, y) ? isl._occ[y * isl.grid.w + x] : null; }
   function landAt(isl, x, y) { return inside(isl, x, y) ? isl.grid.land[y * isl.grid.w + x] : 0; }
 
+  // Los leñadores solo talan árboles; la mina saca todo lo demás.
+  const DIGGERS = { lenadores: 1, extractor: 1 };
+  const digs = (type, k) => !!k && (type === 'lenadores' ? k === 'madera' : k !== 'madera');
+
   Isl.canPlace = function (isl, type, x, y) {
     const def = D.BUILD[type], g = isl.grid;
     let res = 0;
@@ -41,11 +45,11 @@
       for (let i = 0; i < def.w; i++) {
         const tx = x + i, ty = y + j;
         if (!landAt(isl, tx, ty) || occAt(isl, tx, ty)) return false;
-        if (g.res[ty * g.w + tx]) res++;
+        if (digs(type, g.res[ty * g.w + tx])) res++;
       }
     }
     if (type === 'muelle') return touchesWater(isl, x, y, def);
-    return type !== 'extractor' || res > 0;
+    return !DIGGERS[type] || res > 0;
   };
 
   function touchesWater(isl, x, y, def) {
@@ -57,7 +61,7 @@
 
   function tryPlace(isl, type, x, y, dir, quiet) {
     if (!Isl.canPlace(isl, type, x, y)) {
-      if (!quiet) PV.UI.toast(type === 'extractor' ? 'La mina tiene que ir sobre un yacimiento.' : type === 'muelle' ? 'El muelle tiene que tocar el agua.' : 'No se puede construir ahí.', 'bad');
+      if (!quiet) PV.UI.toast(type === 'extractor' ? 'La mina tiene que ir sobre piedra o mineral.' : type === 'lenadores' ? 'Los leñadores tienen que ir sobre árboles.' : type === 'muelle' ? 'El muelle tiene que tocar el agua.' : 'No se puede construir ahí.', 'bad');
       return null;
     }
     const cost = D.BUILD[type].cost;
@@ -66,7 +70,7 @@
     const b = { id: PV.state.nextId++, type, x, y, dir };
     if (type === 'cinta') b.items = [];
     else { b.prog = 0; b.out = []; }
-    if (type === 'extractor') b.ri = 0;
+    if (DIGGERS[type]) b.ri = 0;
     if (type === 'fundicion') { b.ore = null; b.oreN = 0; b.fuel = 0; }
     if (type === 'aserradero') b.n = 0;
     if (type === 'clasificador') { b.filter = null; b.hold = null; }
@@ -176,7 +180,7 @@
   function updateBuilding(isl, b, dt) {
     const g = isl.grid;
     switch (b.type) {
-      case 'extractor': {
+      case 'extractor': case 'lenadores': {
         if (!b.out.length && !b.empty) {
           b.prog += dt * D.EXTRACT_RATE;
           if (b.prog >= 1) {
@@ -185,7 +189,7 @@
             for (let k = 0; k < 9; k++) {
               const i = (b.ri + k) % 9;
               const idx = (b.y + Math.floor(i / 3)) * g.w + b.x + (i % 3);
-              if (g.res[idx] && g.amt[idx] > 0) {
+              if (digs(b.type, g.res[idx]) && g.amt[idx] > 0) {
                 b.out.push(g.res[idx]);
                 if (--g.amt[idx] <= 0) g.res[idx] = '';
                 b.ri = i + 1;
@@ -359,6 +363,22 @@
     if (moved) PV.UI.toast(`Se movieron ${moved} unidades.`, 'good');
   };
 
+  // Mueve n unidades de un recurso entre el almacén de la isla y la bodega.
+  Isl.move = function (k, n, toShip) {
+    const isl = Isl.cur, S = PV.state, Inv = PV.Inv;
+    if (!isl) return;
+    if (toShip) {
+      const got = Inv.addCargo(k, Math.min(n, isl.storage[k] || 0));
+      Inv.add(isl.storage, k, -got);
+      if (!got) PV.UI.toast('La bodega está llena.', 'bad');
+    } else {
+      const free = Inv.storageCap(isl) - Inv.storageTotal(isl);
+      const m = Math.min(n, free, S.ship.cargo[k] || 0);
+      if (m > 0) { Inv.add(S.ship.cargo, k, -m); Inv.add(isl.storage, k, m); }
+      else PV.UI.toast(Inv.storageCap(isl) ? 'El almacén está lleno.' : 'Construí un almacén primero.', 'bad');
+    }
+  };
+
   // ---------- Entrada ----------
 
   function screenToWorld(mx, my) {
@@ -462,10 +482,24 @@
     const g = isl.grid, tot = {};
     for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
       const idx = (b.y + j) * g.w + b.x + i;
-      if (g.res[idx]) tot[g.res[idx]] = (tot[g.res[idx]] || 0) + g.amt[idx];
+      if (digs(b.type, g.res[idx])) tot[g.res[idx]] = (tot[g.res[idx]] || 0) + g.amt[idx];
     }
     return tot;
   }
+
+  // Partidas viejas: las minas que estaban sobre árboles pasan a ser leñadores.
+  Isl.migrate = function (isl) {
+    const g = isl.grid;
+    for (const b of isl.buildings) {
+      if (b.type !== 'extractor') continue;
+      let wood = 0, other = 0;
+      for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
+        const k = g.res[(b.y + j) * g.w + b.x + i];
+        if (k === 'madera') wood++; else if (k) other++;
+      }
+      if (wood > other) { b.type = 'lenadores'; b.empty = false; }
+    }
+  };
 
   const recipeTxt = r => Object.keys(r.in).map(k => r.in[k] + ' ' + D.RES[k].n).join(' + ') + ' → ' + r.n + ' ' + D.RES[r.out].n;
   Isl.recipeTxt = recipeTxt;
@@ -479,7 +513,7 @@
     if (b) {
       const def = D.BUILD[b.type];
       let s = `<b>${def.icon} ${def.n}</b><br>`;
-      if (b.type === 'extractor') {
+      if (DIGGERS[b.type]) {
         const tot = resUnder(isl, b), keys = Object.keys(tot);
         s += keys.length ? keys.map(k => `${D.RES[k].n}: quedan ${tot[k]}`).join('<br>') : '<span style="color:#e74c3c">Yacimiento agotado</span>';
         if (b.out.length) s += '<br><i>Esperando: poné un sendero o un almacén en la flecha.</i>';
@@ -606,12 +640,12 @@
     const busy = isl ? t * 8 + (b.id || 0) : 0;
     if (def.w > 1) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; rrect(ctx, px + 5, py + 6, w - 6, h - 6, 6); ctx.fill(); }
 
-    if (b.type === 'extractor') {
+    if (DIGGERS[b.type]) {
       const tot = isl ? resUnder(isl, b) : {};
       const main = Object.keys(tot).sort((a, c) => tot[c] - tot[a])[0];
       const working = isl && !b.empty && !(b.out && b.out.length);
       const sw = working ? busy : 0;
-      if (main === 'madera') {
+      if (b.type === 'lenadores') {
         // Campamento de leñadores: troncos apilados y tocones.
         floor(ctx, px, py, w, h, '#6f9445', '#3f5a26');
         ctx.fillStyle = '#2e6b2a'; ctx.beginPath(); ctx.arc(px + 22, py + 22, 14, 0, TAU); ctx.fill();

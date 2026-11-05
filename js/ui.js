@@ -10,7 +10,7 @@
   const HELP = {
     sea: [[['W', 'S'], 'velas'], [['A', 'D'], 'timón'], [['Q'], 'cañones babor'], [['E'], 'cañones estribor'], [['F'], 'interactuar'], [['Rueda'], 'zoom']],
     port: [[['Esc'], 'zarpar']],
-    island: [[['1', '0'], 'elegir edificio'], [['R'], 'rotar'], [['Clic'], 'construir · elegir receta'], [['Clic der.'], 'quitar'],
+    island: [[['1', '0'], 'edificios'], [['M'], 'muelle'], [['R'], 'rotar'], [['Clic'], 'construir · elegir receta'], [['Clic der.'], 'quitar'],
       [['W', 'A', 'S', 'D'], 'cámara'], [['Rueda'], 'zoom'], [['Esc'], 'zarpar']],
   };
   const resName = k => D.RES[k].n;
@@ -28,8 +28,11 @@
       const b = e.target.closest('button');
       if (!b) return;
       if (b.dataset.act === 'leave') PV.Island.leave();
-      else if (b.dataset.act === 'load') PV.Island.transfer(true);
       else if (b.dataset.act === 'unload') PV.Island.transfer(false);
+      else if (b.dataset.act === 'ld' || b.dataset.act === 'ul') {
+        PV.Island.move(b.dataset.k, b.dataset.n === 'all' ? Infinity : +b.dataset.n, b.dataset.act === 'ld');
+        lastInfo = '';
+      }
     });
 
     $('portPanel').addEventListener('click', e => {
@@ -183,15 +186,24 @@
   function islandInfo() {
     const isl = PV.Island.cur, Inv = PV.Inv;
     if (!isl) return '';
-    const cap = Inv.storageCap(isl);
+    const cap = Inv.storageCap(isl), cargo = PV.state.ship.cargo;
     return `<h3>${isl.name}</h3>
       <div class="sub">${isl.home ? 'Tu isla inicial' : '★'.repeat(isl.tier) + ' ' + D.TIERS[isl.tier].n} · <i class="coin"></i> ${U.fmt(PV.state.doblones)}</div>
-      <div class="lbl"><i class="crate"></i> Almacén ${Inv.storageTotal(isl)} / ${cap}</div>
-      ${cap ? '' : '<div class="muted">Construí un almacén (<kbd>3</kbd>) para guardar lo que producís.</div>'}
-      <div class="chips">${Inv.chips(isl.storage)}</div>
-      <div class="lbl"><i class="crate"></i> Bodega del barco ${Inv.cargoTotal()} / ${Inv.cargoCap()}</div>
-      <div class="chips">${Inv.chips(PV.state.ship.cargo)}</div>`;
+      <div class="lbl"><i class="crate"></i> Almacén ${Inv.storageTotal(isl)} / ${cap} <span class="muted">· subir al barco</span></div>
+      ${cap ? '' : '<div class="muted">Construí un almacén (<kbd>4</kbd>) para guardar lo que producís.</div>'}
+      ${invRows(isl.storage, 'ld', '⬆')}
+      <div class="lbl"><i class="crate"></i> Bodega del barco ${Inv.cargoTotal()} / ${Inv.cargoCap()} <span class="muted">· bajar a la isla</span></div>
+      ${invRows(cargo, 'ul', '⬇')}`;
   }
+
+  // Una fila por recurso con botones para mover 10 o todo.
+  function invRows(bag, act, arrow) {
+    const keys = Object.keys(bag).sort((a, b) => bag[b] - bag[a]);
+    if (!keys.length) return '<div class="muted">vacío</div>';
+    return '<div class="invrows">' + keys.map(k => `<div class="invrow"><i style="background:${D.RES[k].c}"></i><span>${resName(k)}</span><b>${bag[k]}</b>
+      <button data-act="${act}" data-k="${k}" data-n="10">${arrow} 10</button><button data-act="${act}" data-k="${k}" data-n="all">${arrow} todo</button></div>`).join('') + '</div>';
+  }
+  let lastInfo = '';
 
   UI.update = function (dt) {
     const s = PV.scene;
@@ -218,7 +230,9 @@
     }
     if (s !== 'menu') PV.Tutorial.update();
     if (s === 'island') {
-      $('islandInfo').innerHTML = islandInfo();
+      // Solo se redibuja si cambió, para no perder clics en los botones.
+      const info = islandInfo();
+      if (info !== lastInfo) { $('islandInfo').innerHTML = info; lastInfo = info; }
       document.querySelectorAll('#buildbar small[data-cost]').forEach(el => {
         el.innerHTML = PV.Inv.costHtml(D.BUILD[el.dataset.cost].cost, PV.Island.cur);
       });

@@ -6,7 +6,7 @@ Juego de piratas estilo Factorio: navegá un archipiélago, conquistá islas, au
 Abrí `index.html` en el navegador (doble clic). No hace falta instalar nada.
 
 **En el mar:** W/S velas · A/D timón · Q babor · E estribor (cañones) · F interactuar · rueda zoom
-**En la isla:** 1-0 elegir edificio · R rotar · clic construir (arrastrá para senderos) · clic en capataz, estibador, taller, herrería o muelle para elegir receta/filtro · clic derecho quitar · WASD cámara · Esc zarpar
+**En la isla:** 1 leñadores · 2 mina · 3 sendero · 4 almacén · 5-0 fábricas · M muelle · R rotar · clic construir (arrastrá para senderos) · clic en capataz, estibador, taller, herrería o muelle para elegir receta/filtro · clic derecho quitar · WASD cámara · Esc zarpar · en el panel de la isla elegís qué recurso subir o bajar del barco
 
 La partida se guarda sola en el navegador.
 
