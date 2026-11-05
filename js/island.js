@@ -7,7 +7,8 @@
   const TAU = Math.PI * 2;
   const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]]; // este, sur, oeste, norte
   const BELT_SPEED = 1.9;  // casillas por segundo
-  const GAP = 0.34;        // separación mínima entre objetos en una cinta
+  const GAP = 0.34;
+  const INS_T = 0.7;       // segundos por viaje del estibador (sin investigación)        // separación mínima entre objetos en una cinta
   const Isl = { cur: null, sel: null, dir: 0, cam: { x: 0, y: 0, z: 1 }, drag: null, pan: null, hover: null };
 
   // ---------- Grilla y ocupación ----------
@@ -60,6 +61,8 @@
   }
 
   function tryPlace(isl, type, x, y, dir, quiet) {
+    const lock = PV.Tech.buildLocked(type);
+    if (lock) { if (!quiet) PV.UI.toast(`Primero investigá «${D.TECH[lock].n}» en un Cartógrafo (tecla I).`, 'bad'); return null; }
     if (!Isl.canPlace(isl, type, x, y)) {
       if (!quiet) PV.UI.toast(type === 'extractor' ? 'La mina tiene que ir sobre piedra o mineral.' : type === 'lenadores' ? 'Los leñadores tienen que ir sobre árboles.' : type === 'muelle' ? 'El muelle tiene que tocar el agua.' : 'No se puede construir ahí.', 'bad');
       return null;
@@ -74,7 +77,8 @@
     if (type === 'fundicion') { b.ore = null; b.oreN = 0; b.fuel = 0; }
     if (type === 'aserradero') b.n = 0;
     if (type === 'clasificador') { b.filter = null; b.hold = null; }
-    if (type === 'insertador') { b.filter = null; b.hand = null; }
+    if (type === 'insertador') { b.filter = null; b.hand = null; b.handN = 0; }
+    if (type === 'cartografo') b.inv = {};
     if (D.RECIPES[type]) { b.recipe = Object.keys(D.RECIPES[type])[0]; b.inv = {}; }
     if (type === 'muelle') { b.store = {}; b.unload = []; }
     isl.buildings.push(b);
@@ -92,7 +96,7 @@
     for (let i = 0; i < (b.oreN || 0); i++) back.push(b.ore);
     for (let i = 0; i < (b.n || 0); i++) back.push('madera');
     if (b.hold) back.push(b.hold);
-    if (b.hand) back.push(b.hand);
+    if (b.hand) for (let i = 0; i < (b.handN || 1); i++) back.push(b.hand);
     for (const k of back) PV.Inv.add(isl.storage, k, 1);
     for (const bag of [b.inv, b.store]) if (bag) for (const k in bag) PV.Inv.add(isl.storage, k, bag[k]);
   }
@@ -142,8 +146,12 @@
         if (!dry) PV.Inv.add(b.inv, item, 1);
         return true;
       }
+      case 'cartografo':
+        if ((b.inv[item] || 0) >= Math.min(10, PV.Tech.need(item))) return false;
+        if (!dry) PV.Inv.add(b.inv, item, 1);
+        return true;
       case 'muelle':
-        if (PV.Inv.sum(b.store) >= D.DOCK_CAP) return false;
+        if (PV.Inv.sum(b.store) >= Isl.dockCap()) return false;
         if (!dry) PV.Inv.add(b.store, item, 1);
         return true;
     }
@@ -157,8 +165,8 @@
   }
 
   // El estibador toma de lo que tiene atrás algo que lo de adelante acepte.
-  function grab(isl, b, src, fx, fy) {
-    const ok = k => (!b.filter || b.filter === k) && give(isl, b, fx, fy, k, true);
+  function grab(isl, b, src, fx, fy, only) {
+    const ok = k => (!only || only === k) && (!b.filter || b.filter === k) && give(isl, b, fx, fy, k, true);
     if (src.type === 'cinta') {
       const it = src.items[0];
       if (it && it.p >= 0.7 && ok(it.t)) { src.items.shift(); return it.t; }
@@ -182,7 +190,7 @@
     switch (b.type) {
       case 'extractor': case 'lenadores': {
         if (!b.out.length && !b.empty) {
-          b.prog += dt * D.EXTRACT_RATE;
+          b.prog += dt * D.EXTRACT_RATE * PV.Tech.fx('mine');
           if (b.prog >= 1) {
             b.prog = 0;
             let mined = false;
@@ -191,7 +199,7 @@
               const idx = (b.y + Math.floor(i / 3)) * g.w + b.x + (i % 3);
               if (digs(b.type, g.res[idx]) && g.amt[idx] > 0) {
                 b.out.push(g.res[idx]);
-                if (--g.amt[idx] <= 0) g.res[idx] = '';
+                if (Math.random() >= PV.Tech.fx('keep') && --g.amt[idx] <= 0) g.res[idx] = '';
                 b.ri = i + 1;
                 mined = true;
                 break;
@@ -206,7 +214,7 @@
       case 'fundicion':
         b.on = b.out.length < 3 && b.oreN >= 2 && b.fuel >= 1;
         if (b.on) {
-          b.prog += dt / 2.5;
+          b.prog += dt / 2.5 * PV.Tech.fx('fab');
           if (b.prog >= 1) {
             b.prog = 0; b.oreN -= 2; b.fuel -= 1;
             b.out.push(D.SMELT[b.ore]);
@@ -218,7 +226,7 @@
       case 'aserradero':
         b.on = b.out.length < 4 && b.n >= 1;
         if (b.on) {
-          b.prog += dt / 1.2;
+          b.prog += dt / 1.2 * PV.Tech.fx('fab');
           if (b.prog >= 1) { b.prog = 0; b.n--; b.out.push('tablones', 'tablones'); }
         }
         pushOut(isl, b);
@@ -233,14 +241,33 @@
         break;
       }
       case 'insertador': {
-        const [dx, dy] = DIRS[b.dir];
+        // Tarda INS_T segundos por viaje; con investigación camina más rápido y lleva varias cosas iguales.
+        const [dx, dy] = DIRS[b.dir], fx = b.x + dx, fy = b.y + dy;
         if (!b.hand) {
           const src = occAt(isl, b.x - dx, b.y - dy);
           b.prog = 0;
-          if (src && src !== b) b.hand = grab(isl, b, src, b.x + dx, b.y + dy);
+          if (src && src !== b) {
+            b.hand = grab(isl, b, src, fx, fy);
+            b.handN = b.hand ? 1 : 0;
+            const carry = 1 + PV.Tech.fx('carry');
+            while (b.hand && b.handN < carry && grab(isl, b, src, fx, fy, b.hand)) b.handN++;
+          }
         } else {
-          b.prog = Math.min(1, b.prog + dt / 0.7);
-          if (b.prog >= 1 && give(isl, b, b.x + dx, b.y + dy, b.hand)) { b.hand = null; b.prog = 0; }
+          b.prog = Math.min(1, b.prog + dt * PV.Tech.fx('ins') / INS_T);
+          if (b.prog >= 1) {
+            if (!b.handN) b.handN = 1; // partidas viejas
+            while (b.handN > 0 && give(isl, b, fx, fy, b.hand)) b.handN--;
+            if (!b.handN) { b.hand = null; b.prog = 0; }
+          }
+        }
+        break;
+      }
+      case 'cartografo': {
+        const k = Object.keys(b.inv).find(k => b.inv[k] > 0 && PV.Tech.need(k) > 0);
+        b.on = !!k;
+        if (b.on) {
+          b.prog += dt / D.RESEARCH_T;
+          if (b.prog >= 1) { b.prog = 0; PV.Inv.add(b.inv, k, -1); PV.Tech.study(k); }
         }
         break;
       }
@@ -248,7 +275,7 @@
         const r = D.RECIPES[b.type][b.recipe];
         b.on = b.out.length < 4 && Object.keys(r.in).every(k => (b.inv[k] || 0) >= r.in[k]);
         if (b.on) {
-          b.prog += dt / r.t;
+          b.prog += dt / r.t * PV.Tech.fx('fab');
           if (b.prog >= 1) {
             b.prog = 0;
             for (const k in r.in) PV.Inv.add(b.inv, k, -r.in[k]);
@@ -262,7 +289,7 @@
         const its = b.items;
         for (let i = 0; i < its.length; i++) {
           const lim = i === 0 ? 1 : its[i - 1].p - GAP;
-          its[i].p = Math.min(its[i].p + BELT_SPEED * dt, lim);
+          its[i].p = Math.min(its[i].p + BELT_SPEED * PV.Tech.fx('belt') * dt, lim);
         }
         if (its.length && its[0].p >= 1) {
           const [dx, dy] = DIRS[b.dir];
@@ -309,9 +336,16 @@
       case 'almacen':
         return PV.Inv.storageTotal(isl) >= PV.Inv.storageCap(isl) ? { ic: '⛔', lvl: 'dead', msg: 'Almacén lleno: cargá el barco o poné otro almacén.' } : null;
       case 'muelle':
-        return PV.Inv.sum(b.store) >= D.DOCK_CAP ? { ic: '⛔', lvl: 'dead', msg: 'Muelle lleno: pasá con el barco o con un mercante.' } : null;
+        return PV.Inv.sum(b.store) >= Isl.dockCap() ? { ic: '⛔', lvl: 'dead', msg: 'Muelle lleno: pasá con el barco o con un mercante.' } : null;
       case 'clasificador':
         return b.hold ? { ic: '🚧', lvl: 'stuck', msg: `No tiene por dónde mandar ${D.RES[b.hold].n}.` } : null;
+      case 'cartografo': {
+        const cur = PV.Tech.st().cur;
+        if (!cur) return { ic: '📜', lvl: 'wait', msg: 'No hay nada para investigar: hacé clic y elegí una investigación.' };
+        if (b.on) return null;
+        const cost = D.TECH[cur].cost;
+        return { ic: '💤', lvl: 'wait', msg: 'Falta: ' + Object.keys(cost).filter(k => PV.Tech.need(k) > 0).map(k => D.RES[k].n).join(', ') + '.' };
+      }
       case 'insertador':
         return b.hand && b.prog >= 1 ? { ic: '🚧', lvl: 'stuck', msg: `No puede dejar ${D.RES[b.hand].n}: lo de adelante no lo recibe.` } : null;
     }
@@ -336,6 +370,7 @@
 
   // ---------- Muelles ----------
 
+  Isl.dockCap = () => Math.round(D.DOCK_CAP * PV.Tech.fx('store'));
   Isl.docks = isl => isl.buildings.filter(b => b.type === 'muelle');
 
   // Pasa la carga de los muelles a una bodega (cargo) con lugar libre "room".
@@ -393,6 +428,8 @@
   };
 
   Isl.select = function (type) {
+    const lock = PV.Tech.buildLocked(type);
+    if (lock) { Isl.sel = null; return PV.UI.toast(`🔒 ${D.BUILD[type].n}: investigá «${D.TECH[lock].n}» en un Cartógrafo (tecla I).`, 'bad'); }
     Isl.sel = Isl.sel === type ? null : type;
   };
 
@@ -506,7 +543,8 @@
       else if (e.button === 2) { removeAt(isl, tx, ty); Isl.drag = { mode: 'remove' }; }
       else if (e.button === 0 && !Isl.sel) {
         const b = occAt(isl, tx, ty);
-        if (b && PV.UI.CHOOSE[b.type]) PV.UI.chooser(b, e.clientX, e.clientY);
+        if (b && b.type === 'cartografo') PV.UI.openResearch();
+        else if (b && PV.UI.CHOOSE[b.type]) PV.UI.chooser(b, e.clientX, e.clientY);
       }
       else if (e.button === 0 && Isl.sel) {
         if (Isl.sel === 'cinta') {
@@ -585,13 +623,19 @@
       } else if (b.type === 'clasificador') {
         s += `Sigue derecho: <b>${b.filter ? D.RES[b.filter].n : 'todo'}</b><br>El resto sale por los costados.<br><i>Clic para elegir.</i>`;
       } else if (b.type === 'insertador') {
-        s += `Agarra: <b>${b.filter ? D.RES[b.filter].n : 'cualquier cosa'}</b>` + (b.hand ? `<br>Lleva: ${D.RES[b.hand].n}` : '') + '<br><i>Clic para filtrar.</i>';
+        s += `Agarra: <b>${b.filter ? D.RES[b.filter].n : 'cualquier cosa'}</b>` + (b.hand ? `<br>Lleva: ${D.RES[b.hand].n} ×${b.handN || 1}` : '') +
+          `<br>${(INS_T / PV.Tech.fx('ins')).toFixed(2)} s por viaje · hasta ${1 + PV.Tech.fx('carry')} por vez<br><i>Clic para filtrar.</i>`;
       } else if (D.RECIPES[b.type]) {
         const r = D.RECIPES[b.type][b.recipe];
         s += `Receta: <b>${recipeTxt(r)}</b><br>Tiene: ${Object.keys(r.in).map(k => D.RES[k].n + ' ' + (b.inv[k] || 0) + '/' + r.in[k]).join(', ')}`;
         s += b.on ? '<br>🔨 Trabajando…' : '<br><i>Clic para cambiar la receta.</i>';
+      } else if (b.type === 'cartografo') {
+        const cur = PV.Tech.st().cur, inv = Object.keys(b.inv).filter(k => b.inv[k] > 0);
+        s += cur ? `Investigando: <b>${D.TECH[cur].n}</b> (${Math.round(PV.Tech.progress(cur) * 100)}%)` : 'Sin investigación elegida.';
+        if (inv.length) s += '<br>En la mesa: ' + inv.map(k => D.RES[k].n + ' ' + b.inv[k]).join(', ');
+        s += '<br><i>Clic para abrir la investigación.</i>';
       } else if (b.type === 'muelle') {
-        s += `Carga esperando: ${PV.Inv.sum(b.store)} / ${D.DOCK_CAP}` + (b.unload.length ? `<br>Descarga del barco: ${b.unload.map(k => D.RES[k].n).join(', ')}` : '') + '<br><i>Clic para elegir qué descargar.</i>';
+        s += `Carga esperando: ${PV.Inv.sum(b.store)} / ${Isl.dockCap()}` + (b.unload.length ? `<br>Descarga del barco: ${b.unload.map(k => D.RES[k].n).join(', ')}` : '') + '<br><i>Clic para elegir qué descargar.</i>';
       }
       return s + '<br><span style="opacity:.7">R rotar · clic derecho quitar</span>';
     }
@@ -827,6 +871,26 @@
       keys.forEach((k, i) => drawBundle(ctx, px + 20 + (i % 2) * 24, py + 20 + Math.floor(i / 2) * 24, k, 7));
       ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 14px Georgia'; ctx.textAlign = 'center';
       if (!keys.length) ctx.fillText('⚓', cx, cy + 5);
+    } else if (b.type === 'cartografo') {
+      // Casa del cartógrafo: mesa con un mapa abierto, globo terráqueo, rollos y el cartógrafo con su pluma.
+      floor(ctx, px, py, w, h, '#a8865a', '#5e3b1c');
+      ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1;
+      for (let i = 1; i < 6; i++) { ctx.beginPath(); ctx.moveTo(px + 4, py + i * 10.5); ctx.lineTo(px + w - 4, py + i * 10.5); ctx.stroke(); }
+      ctx.fillStyle = '#6b4423'; rrect(ctx, px + 8, py + 10, w - 16, 26, 3); ctx.fill();
+      ctx.fillStyle = '#f0dfb4'; rrect(ctx, px + 12, py + 13, w - 24, 20, 2); ctx.fill();
+      ctx.strokeStyle = '#8a6a3a'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(px + 16, py + 28); ctx.quadraticCurveTo(cx - 4, py + 14, cx + 4, py + 24); ctx.quadraticCurveTo(cx + 12, py + 30, px + w - 16, py + 18); ctx.stroke();
+      ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(cx + 6, py + 19); ctx.lineTo(cx + 10, py + 23); ctx.moveTo(cx + 10, py + 19); ctx.lineTo(cx + 6, py + 23); ctx.stroke();
+      ctx.fillStyle = '#3e7cb1'; ctx.beginPath(); ctx.arc(px + w - 11, py + h - 12, 6, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#6fae5a'; ctx.beginPath(); ctx.arc(px + w - 13, py + h - 13, 2.5, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#7a5230'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px + w - 11, py + h - 12, 7, 0, TAU); ctx.stroke();
+      ctx.fillStyle = '#e8d6a8'; ctx.strokeStyle = '#8a6a3a';
+      for (let i = 0; i < 2; i++) { rrect(ctx, px + 6, py + h - 16 + i * 5, 14, 4, 2); ctx.fill(); ctx.stroke(); }
+      drawPerson(ctx, cx, py + h - 16, -Math.PI / 2, '#2c3e50', b.on ? t * 6 : 0, '#1a1a1a');
+      if (b.on) { ctx.strokeStyle = '#f4f4f4'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(cx + 4, py + h - 21); ctx.lineTo(cx + 9 + Math.sin(t * 12) * 2, py + h - 30); ctx.stroke(); }
+      const k = b.inv && Object.keys(b.inv).find(k => b.inv[k] > 0);
+      if (k) drawBundle(ctx, px + 12, py + 38, k, 3.5);
     } else if (b.type === 'clasificador') {
       // Capataz con su cartel: lo elegido sigue derecho, lo demás a los costados.
       drawBelt(ctx, b);
@@ -850,7 +914,7 @@
       if (b.hand) drawBundle(ctx, x, y, b.hand, 4);
       if (b.filter) { ctx.fillStyle = D.RES[b.filter].c; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.arc(px + 6, py + 6, 3.5, 0, TAU); ctx.fill(); ctx.stroke(); }
     }
-    if (b.type !== 'almacen' && b.type !== 'muelle') drawArrow(ctx, b);
+    if (b.type !== 'almacen' && b.type !== 'muelle' && b.type !== 'cartografo') drawArrow(ctx, b);
   }
 
   function drawTiles(ctx, isl, x0, y0, x1, y1, t) {

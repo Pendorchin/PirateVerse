@@ -8,9 +8,9 @@
 
   // Atajos visibles: [teclas, descripción]
   const HELP = {
-    sea: [[['W', 'S'], 'velas'], [['A', 'D'], 'timón'], [['Q'], 'cañones babor'], [['E'], 'cañones estribor'], [['F'], 'interactuar'], [['Rueda'], 'zoom']],
+    sea: [[['I'], 'investigación'], [['W', 'S'], 'velas'], [['A', 'D'], 'timón'], [['Q'], 'cañones babor'], [['E'], 'cañones estribor'], [['F'], 'interactuar'], [['Rueda'], 'zoom']],
     port: [[['Esc'], 'zarpar']],
-    island: [[['1', '0'], 'edificios'], [['M'], 'muelle'], [['R'], 'rotar'], [['Clic'], 'construir · elegir receta'], [['Clic der.'], 'quitar'],
+    island: [[['1', '0'], 'edificios'], [['M'], 'muelle'], [['C'], 'cartógrafo'], [['I'], 'investigación'], [['R'], 'rotar'], [['Clic'], 'construir · elegir receta'], [['Clic der.'], 'quitar'],
       [['W', 'A', 'S', 'D'], 'cámara'], [['Rueda'], 'zoom'], [['Esc'], 'zarpar']],
   };
   const resName = k => D.RES[k].n;
@@ -40,6 +40,13 @@
       if (b && !b.disabled) PV.Port.action(b);
     });
 
+    $('research').addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b || b.disabled) return;
+      if (b.dataset.act === 'close') return UI.closeResearch();
+      if (b.dataset.t) { PV.Tech.start(b.dataset.t); UI.renderResearch(); }
+    });
+
     $('chooser').addEventListener('click', e => {
       const el = e.target.closest('button');
       if (el) pick(el.dataset.v);
@@ -67,6 +74,7 @@
     show('portPanel', s === 'port');
     show('tooltip', false);
     UI.closeChooser();
+    UI.closeResearch();
     $('help').innerHTML = helpHtml(HELP[s] || []);
     $('quest').classList.toggle('island', s === 'island');
     if (s === 'menu') show('quest', false);
@@ -78,8 +86,9 @@
 
   let chooseB = null;
   const RES_KEYS = () => Object.keys(D.RES);
-  const opt = (v, label, on, color) =>
-    `<button data-v="${v}" class="${on ? 'on' : ''}">${color ? `<i class="dot" style="background:${color}"></i>` : ''}${label}</button>`;
+  const opt = (v, label, on, color, lock) =>
+    `<button data-v="${v}" class="${on ? 'on' : ''}" ${lock ? `disabled title="Investigá «${D.TECH[lock].n}»"` : ''}>${color ? `<i class="dot" style="background:${color}"></i>` : ''}${lock ? '🔒 ' : ''}${label}</button>`;
+  const recipeOpts = (type, b) => Object.keys(D.RECIPES[type]).map(k => opt(k, PV.Island.recipeTxt(D.RECIPES[type][k]), b.recipe === k, null, PV.Tech.recipeLocked(type, k))).join('');
   const resOpts = (isOn) => RES_KEYS().map(k => opt(k, resName(k), isOn(k), D.RES[k].c)).join('');
 
   UI.CHOOSE = {
@@ -88,9 +97,9 @@
     insertador: b => ({ title: '💪 Estibador: ¿qué agarra?', sub: 'Solo lleva lo que el de adelante acepta.',
       html: opt('', 'Cualquier cosa', !b.filter) + resOpts(k => b.filter === k) }),
     herreria: b => ({ title: '⚒️ Herrería: receta', sub: '',
-      html: Object.keys(D.RECIPES.herreria).map(k => opt(k, PV.Island.recipeTxt(D.RECIPES.herreria[k]), b.recipe === k)).join('') }),
+      html: recipeOpts('herreria', b) }),
     taller: b => ({ title: '🧵 Taller: receta', sub: '',
-      html: Object.keys(D.RECIPES.taller).map(k => opt(k, PV.Island.recipeTxt(D.RECIPES.taller[k]), b.recipe === k)).join('') }),
+      html: recipeOpts('taller', b) }),
     muelle: b => ({ title: '⚓ Muelle: al llegar, bajar del barco…', sub: 'Lo que marques se baja solo al almacén una vez, cuando llegás a la isla o desembarcás. Lo que cargues a mano después no se toca. (Lo que traen los senderos al muelle se sube solo al barco.)',
       html: resOpts(k => b.unload.includes(k)), multi: true }),
   };
@@ -179,6 +188,7 @@
         <div class="bar reload"><div style="width:${rr * 100}%"></div><span>${rr >= 1 ? '● ' : ''}E Estribor</span></div>
       </div>
       <div class="lbl">💣 Munición: ${ammoTxt(sh.cargo)}</div>
+      ${researchLine()}
       <div class="lbl"><i class="crate"></i> Bodega ${PV.Inv.cargoTotal()} / ${st.cap}</div>
       <div class="chips">${PV.Inv.chips(sh.cargo)}</div>`;
   }
@@ -187,7 +197,7 @@
     const isl = PV.Island.cur, Inv = PV.Inv;
     if (!isl) return '';
     const cap = Inv.storageCap(isl), cargo = PV.state.ship.cargo;
-    return `<h3>${isl.name}</h3>
+    return researchLine() + `<h3>${isl.name}</h3>
       <div class="sub">${isl.home ? 'Tu isla inicial' : '★'.repeat(isl.tier) + ' ' + D.TIERS[isl.tier].n} · <i class="coin"></i> ${U.fmt(PV.state.doblones)}</div>
       <div class="lbl"><i class="crate"></i> Almacén ${Inv.storageTotal(isl)} / ${cap} <span class="muted">· subir al barco</span></div>
       ${cap ? '' : '<div class="muted">Construí un almacén (<kbd>4</kbd>) para guardar lo que producís.</div>'}
@@ -196,6 +206,46 @@
       ${invRows(cargo, 'ul', '⬇')}`;
   }
 
+  function researchLine() {
+    const r = PV.Tech.st(), cur = r && r.cur;
+    return `<div class="lbl research-line">🗺️ ${cur ? `Investigando: <b>${D.TECH[cur].n}</b> ${Math.round(PV.Tech.progress(cur) * 100)}%` : '<span class="muted">Sin investigación</span>'} <kbd>I</kbd></div>`;
+  }
+
+  // ---------- Panel de investigación ----------
+
+  UI.researchOpen = () => !$('research').classList.contains('hidden');
+  UI.openResearch = function () { UI.closeChooser(); $('research').classList.remove('hidden'); UI.renderResearch(); };
+  UI.closeResearch = function () { $('research').classList.add('hidden'); };
+  UI.toggleResearch = () => UI.researchOpen() ? UI.closeResearch() : UI.openResearch();
+
+  UI.renderResearch = function () {
+    const r = PV.Tech.st();
+    if (!r) return;
+    const hasCarto = PV.state.islands.some(i => i.owned && (i.buildings || []).some(b => b.type === 'cartografo'));
+    const cols = D.TECH_LINES.map(L => {
+      const cards = Object.keys(D.TECH).filter(id => D.TECH[id].line === L.k).map(id => {
+        const t = D.TECH[id], done = PV.Tech.done(id), cur = r.cur === id, ok = PV.Tech.reqOk(id);
+        const got = r.prog[id] || {};
+        const cost = Object.keys(t.cost).map(k => {
+          const g = Math.min(t.cost[k], got[k] || 0);
+          return `<span class="cost ${g >= t.cost[k] || done ? '' : 'miss'}">${done ? t.cost[k] : g + '/' + t.cost[k]} ${resName(k)}</span>`;
+        }).join(' ');
+        const pct = Math.round(PV.Tech.progress(id) * 100);
+        let foot;
+        if (done) foot = '<span class="tdone">✓ Investigado</span>';
+        else if (!ok) foot = `<span class="muted">🔒 Requiere: ${t.req.filter(q => !PV.Tech.done(q)).map(q => D.TECH[q].n).join(', ')}</span>`;
+        else foot = `<button data-t="${id}" class="${cur ? '' : 'primary'}">${cur ? 'Pausar' : pct ? 'Seguir (' + pct + '%)' : 'Investigar'}</button>`;
+        return `<div class="tech ${done ? 'done' : cur ? 'cur' : ok ? '' : 'lock'}">
+          <b>${t.n}</b><div class="sub">${t.desc}</div><div class="tcost">${cost}</div>
+          ${cur ? `<div class="tbar"><i style="width:${pct}%"></i></div>` : ''}${foot}</div>`;
+      }).join('');
+      return `<div class="tcol"><h4>${L.icon} ${L.n}</h4>${cards}</div>`;
+    }).join('');
+    $('research').innerHTML = `<div class="rhead"><h2>🗺️ Investigación</h2><button data-act="close">Cerrar (I / Esc)</button></div>
+      <p class="muted">${hasCarto ? 'Elegí una investigación y mandale los materiales a un <b>Cartógrafo</b> por senderos o estibadores. Con varios cartógrafos se investiga más rápido.' : 'Construí un <b>Cartógrafo</b> (tecla <kbd>C</kbd>) en tu isla y mandale los materiales que pide la investigación.'}</p>
+      <div class="tcols">${cols}</div>`;
+  };
+
   // Una fila por recurso con botones para mover 10 o todo.
   function invRows(bag, act, arrow) {
     const keys = Object.keys(bag).sort((a, b) => bag[b] - bag[a]);
@@ -203,7 +253,7 @@
     return '<div class="invrows">' + keys.map(k => `<div class="invrow"><i style="background:${D.RES[k].c}"></i><span>${resName(k)}</span><b>${bag[k]}</b>
       <button data-act="${act}" data-k="${k}" data-n="10">${arrow} 10</button><button data-act="${act}" data-k="${k}" data-n="all">${arrow} todo</button></div>`).join('') + '</div>';
   }
-  let lastInfo = '';
+  let lastInfo = '', researchT = 0;
 
   UI.update = function (dt) {
     const s = PV.scene;
@@ -229,12 +279,15 @@
       if (p) $('prompt').innerHTML = p;
     }
     if (s !== 'menu') PV.Tutorial.update();
+    if (UI.researchOpen()) { researchT -= 0.15; if (researchT <= 0) { researchT = 1; UI.renderResearch(); } }
     if (s === 'island') {
       // Solo se redibuja si cambió, para no perder clics en los botones.
       const info = islandInfo();
       if (info !== lastInfo) { $('islandInfo').innerHTML = info; lastInfo = info; }
       document.querySelectorAll('#buildbar small[data-cost]').forEach(el => {
-        el.innerHTML = PV.Inv.costHtml(D.BUILD[el.dataset.cost].cost, PV.Island.cur);
+        const k = el.dataset.cost, lock = PV.Tech.buildLocked(k);
+        el.innerHTML = lock ? '<span class="cost miss">🔒 investigar</span>' : PV.Inv.costHtml(D.BUILD[k].cost, PV.Island.cur);
+        el.parentElement.classList.toggle('locked', !!lock);
       });
     }
   };

@@ -68,6 +68,8 @@
                    desc: 'Artesanos hacen bronce, lona, pólvora y balas explosivas. Clic para elegir receta.' },
     muelle:      { n: 'Muelle',     key: 'KeyM', k: 'M', icon: '⚓', w: 2, h: 2, cost: { doblones: 100, tablones: 15 },
                    desc: 'Va en la costa. Lo que le llega se carga solo al barco (o a tus mercantes) cuando pasan.' },
+    cartografo:  { n: 'Cartógrafo', key: 'KeyC', k: 'C', icon: '🗺️', w: 2, h: 2, cost: { doblones: 120, tablones: 20, piedra: 10 },
+                   desc: 'Estudia materiales para investigar mejoras. Mandale lo que pide la investigación actual. Clic para elegir qué investigar.' },
   };
 
   D.EXTRACT_RATE = 0.5;   // objetos por segundo
@@ -88,6 +90,49 @@
       polvora:        { in: { azufre: 1, carbon: 1 }, out: 'polvora', n: 2, t: 3 },
       bala_explosiva: { in: { balas: 2, polvora: 1 }, out: 'bala_explosiva', n: 2, t: 3 },
     },
+  };
+
+  // ---------- Investigación ----------
+  // El Cartógrafo estudia los materiales de a uno: RESEARCH_T segundos por objeto.
+  D.RESEARCH_T = 1.2;
+  // Líneas de investigación (columnas del panel).
+  D.TECH_LINES = [
+    { k: 'log', n: 'Logística', icon: '💪' },
+    { k: 'prod', n: 'Producción', icon: '⛏️' },
+    { k: 'unl', n: 'Desbloqueos', icon: '🔓' },
+    { k: 'nav', n: 'Navegación', icon: '⛵' },
+  ];
+  // fx: efectos. Los de ADD se suman; el resto se multiplica.
+  //   ins (velocidad del estibador), carry (cuánto lleva por viaje), belt (porteadores),
+  //   store (almacenes y muelles), mine (minas y leñadores), fab (fábricas),
+  //   keep (chance de no gastar el yacimiento), mSpeed / mCap (mercantes), sell (precio de venta).
+  // unlock: { build } o { recipe: 'edificio.receta' }.
+  D.TECH_ADD = ['carry', 'mCap', 'keep'];
+  D.TECH = {
+    estiba1:  { line: 'log', n: 'Estibadores ágiles', desc: 'Los estibadores caminan más rápido (+40%).', cost: { tablones: 15, piedra: 15 }, fx: { ins: 1.4 } },
+    estiba2:  { line: 'log', n: 'Estibadores fuertes', desc: 'Cada estibador lleva hasta 2 cosas por viaje.', req: ['estiba1'], cost: { tablones: 25, lingote_cobre: 10 }, fx: { carry: 1 } },
+    estiba3:  { line: 'log', n: 'Estibadores veteranos', desc: 'Más rápidos (+40%) y llevan hasta 3 por viaje.', req: ['estiba2'], cost: { lingote_hierro: 20, lingote_cobre: 15 }, fx: { ins: 1.4, carry: 1 } },
+    estiba4:  { line: 'log', n: 'Maestros estibadores', desc: 'Más rápidos (+50%) y llevan hasta 4 por viaje.', req: ['estiba3'], cost: { placa_hierro: 15, bronce: 10 }, fx: { ins: 1.5, carry: 1 } },
+    sendas1:  { line: 'log', n: 'Porteadores ligeros', desc: 'La carga avanza más rápido por los senderos (+30%).', cost: { tablones: 20, piedra: 20 }, fx: { belt: 1.3 } },
+    sendas2:  { line: 'log', n: 'Senderos empedrados', desc: 'Otro +30% de velocidad en los senderos.', req: ['sendas1'], cost: { piedra: 60, lingote_hierro: 15 }, fx: { belt: 1.3 } },
+    bodegas:  { line: 'log', n: 'Almacenes grandes', desc: 'Almacenes y muelles guardan 50% más.', cost: { tablones: 40, lingote_cobre: 10 }, fx: { store: 1.5 } },
+
+    mineros1: { line: 'prod', n: 'Mejores herramientas', desc: 'Minas y leñadores trabajan 30% más rápido.', cost: { tablones: 20, lingote_cobre: 10 }, fx: { mine: 1.3 } },
+    mineros2: { line: 'prod', n: 'Picos de hierro', desc: 'Otro +30% para minas y leñadores.', req: ['mineros1'], cost: { lingote_hierro: 25, tablones: 20 }, fx: { mine: 1.3 } },
+    vetas:    { line: 'prod', n: 'Vetas profundas', desc: '1 de cada 4 extracciones no gasta el yacimiento.', req: ['mineros1'], cost: { lingote_hierro: 15, lingote_estano: 10 }, fx: { keep: 0.25 } },
+    fab1:     { line: 'prod', n: 'Capataces exigentes', desc: 'Fundiciones, aserraderos y talleres trabajan 25% más rápido.', cost: { tablones: 30, lingote_cobre: 15 }, fx: { fab: 1.25 } },
+    fab2:     { line: 'prod', n: 'Fuelles y hornos', desc: 'Otro +25% para todas las fábricas.', req: ['fab1'], cost: { piedra: 40, lingote_hierro: 20 }, fx: { fab: 1.25 } },
+
+    herreria: { line: 'unl', n: 'Herrería', desc: 'Permite construir la Herrería: balas y placas de hierro.', cost: { lingote_cobre: 15, piedra: 20 }, unlock: { build: 'herreria' } },
+    taller:   { line: 'unl', n: 'Taller', desc: 'Permite construir el Taller: bronce y lona.', cost: { lingote_cobre: 10, tablones: 30 }, unlock: { build: 'taller' } },
+    polvora:  { line: 'unl', n: 'Pólvora', desc: 'El Taller puede mezclar pólvora (azufre + carbón).', req: ['taller'], cost: { azufre: 10, carbon: 10 }, unlock: { recipe: 'taller.polvora' } },
+    explosiva:{ line: 'unl', n: 'Balas explosivas', desc: 'El Taller arma balas explosivas (más del doble de daño).', req: ['polvora', 'herreria'], cost: { balas: 20, polvora: 10 }, unlock: { recipe: 'taller.bala_explosiva' } },
+
+    merc1:    { line: 'nav', n: 'Cascos ligeros', desc: 'Los mercantes navegan 25% más rápido.', cost: { tablones: 40, lingote_cobre: 10 }, fx: { mSpeed: 1.25 } },
+    merc2:    { line: 'nav', n: 'Bodegas amplias', desc: 'Los mercantes cargan 30 más.', req: ['merc1'], cost: { tablones: 60, lingote_hierro: 15 }, fx: { mCap: 30 } },
+    merc3:    { line: 'nav', n: 'Velas de lona', desc: 'Mercantes +25% de velocidad y 30 más de carga.', req: ['merc2'], cost: { lona: 20, placa_hierro: 10 }, fx: { mSpeed: 1.25, mCap: 30 } },
+    regateo:  { line: 'nav', n: 'Regateo', desc: 'Los puertos te pagan 10% más.', cost: { lingote_cobre: 20, tablones: 20 }, fx: { sell: 1.1 } },
+    contactos:{ line: 'nav', n: 'Contactos en el puerto', desc: 'Otro 10% más en las ventas.', req: ['regateo'], cost: { lingote_plata: 10 }, fx: { sell: 1.1 } },
   };
 
   // Munición del barco, de la mejor a la peor. Sin munición se dispara metralla común (daño normal).

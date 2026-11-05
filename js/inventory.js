@@ -19,7 +19,7 @@
   };
 
   Inv.storageTotal = isl => Inv.sum(isl.storage);
-  Inv.storageCap = isl => (isl._nAlm || 0) * D.STORAGE_PER;
+  Inv.storageCap = isl => Math.round((isl._nAlm || 0) * D.STORAGE_PER * PV.Tech.fx('store'));
 
   // Material disponible: bodega del barco + almacén de la isla (si se pasa una).
   Inv.have = (k, isl) => (PV.state.ship.cargo[k] || 0) + (isl ? isl.storage[k] || 0 : 0);

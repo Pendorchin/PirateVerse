@@ -36,6 +36,7 @@
 
   PV.newGame = function () {
     PV.state = createState((Math.random() * 1e9) >>> 0);
+    PV.Tech.reset();
     PV.Island.ensureGrid(PV.state.islands[0]);
     PV.Sea.init();
     PV.setScene('sea');
@@ -49,6 +50,8 @@
     const s = PV.Save.load();
     if (!s) return;
     PV.state = s;
+    PV.Tech.reset();
+    PV.Tech.migrate();
     for (const isl of s.islands) {
       if (isl.grid) { PV.Island.migrate(isl); PV.Island.rebuildOcc(isl); }
       // Partidas viejas: precios para los recursos nuevos.
@@ -60,6 +63,8 @@
   };
 
   PV.onKey = function (code) {
+    if (PV.UI.researchOpen() && (code === 'Escape' || code === 'KeyI')) return PV.UI.closeResearch();
+    if (code === 'KeyI' && (PV.scene === 'sea' || PV.scene === 'island')) return PV.UI.openResearch();
     if (PV.scene === 'sea') PV.Sea.onKey(code);
     else if (PV.scene === 'island') PV.Island.onKey(code);
     else if (PV.scene === 'port' && code === 'Escape') PV.Port.close();

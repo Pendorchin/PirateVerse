@@ -10,6 +10,7 @@
   const ports = () => PV.state.islands.filter(i => i.port);
 
   Fleet.list = () => PV.state.fleet || (PV.state.fleet = []);
+  Fleet.cap = () => D.MERCHANT.cap + PV.Tech.fx('mCap');
 
   Fleet.buy = function (port) {
     const S = PV.state, L = Fleet.list(), M = D.MERCHANT;
@@ -39,7 +40,7 @@
   Fleet.status = function (m) {
     const H = islandOf(m.home), P = islandOf(m.port), n = PV.Inv.sum(m.cargo);
     if (m.st === 'toHome') return `Volviendo a ${H.name}`;
-    if (m.st === 'load') return PV.Island.docks(H).length ? `Cargando en el muelle (${n}/${D.MERCHANT.cap})` : `Esperando: ${H.name} no tiene muelle`;
+    if (m.st === 'load') return PV.Island.docks(H).length ? `Cargando en el muelle (${n}/${Fleet.cap()})` : `Esperando: ${H.name} no tiene muelle`;
     return `Rumbo a ${P.name} con ${n} de carga`;
   };
 
@@ -54,7 +55,7 @@
       if (Math.abs(diff) < 1.3) want += Math.sign(diff || 1) * (1.3 - Math.abs(diff)) * 1.3;
     }
     m.a += U.clamp(U.angDiff(want, m.a), -1.6 * dt, 1.6 * dt);
-    m.v = U.lerp(m.v, D.MERCHANT.speed, Math.min(1, dt));
+    m.v = U.lerp(m.v, D.MERCHANT.speed * PV.Tech.fx('mSpeed'), Math.min(1, dt));
     m.x += Math.cos(m.a) * m.v * dt;
     m.y += Math.sin(m.a) * m.v * dt;
     PV.Sea.collide(m, 20);
@@ -69,9 +70,9 @@
       } else if (m.st === 'load') {
         m.v = U.lerp(m.v, 0, Math.min(1, dt * 2));
         m.wait += dt;
-        PV.Island.takeFromDocks(H, m.cargo, D.MERCHANT.cap - PV.Inv.sum(m.cargo));
+        PV.Island.takeFromDocks(H, m.cargo, Fleet.cap() - PV.Inv.sum(m.cargo));
         const n = PV.Inv.sum(m.cargo);
-        if (n >= D.MERCHANT.cap || (n > 0 && m.wait > 25)) m.st = 'toPort';
+        if (n >= Fleet.cap() || (n > 0 && m.wait > 25)) m.st = 'toPort';
       } else if (m.st === 'toPort') {
         if (sail(m, P, dt)) {
           const got = PV.Port.sellAll(P, m.cargo);

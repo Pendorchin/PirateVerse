@@ -4,7 +4,7 @@
   const U = PV.U, D = PV.D;
   const Port = { isl: null, tab: 'mercado' };
 
-  Port.sellPrice = (isl, k) => Math.max(1, Math.round(D.RES[k].p * isl.market[k].m * isl.market[k].f));
+  Port.sellPrice = (isl, k) => Math.max(1, Math.round(D.RES[k].p * isl.market[k].m * isl.market[k].f * PV.Tech.fx('sell')));
   Port.buyPrice = (isl, k) => Math.max(2, Math.round(D.RES[k].p * isl.market[k].m * isl.market[k].f * 1.35));
 
   // Los precios vuelven de a poco a su valor normal.
@@ -225,7 +225,7 @@
       <div style="display:flex;flex-direction:column;gap:4px">
         <button data-act="fhome" data-i="${i}">Cambiar isla</button><button data-act="fport" data-i="${i}">Cambiar puerto</button></div></div>`).join('');
     const can = L.length < M.max && PV.Inv.canPay(M.cost, null);
-    return `<p class="muted">Los mercantes cargan solos en el <b>muelle</b> de tu isla, navegan al puerto, venden todo y vuelven. Llevan ${M.cap} de carga.</p>
+    return `<p class="muted">Los mercantes cargan solos en el <b>muelle</b> de tu isla, navegan al puerto, venden todo y vuelven. Llevan ${PV.Fleet.cap()} de carga.</p>
       ${rows || '<p class="muted">Todavía no tenés mercantes.</p>'}
       <div class="fleet"><img src="${PV.Spr.src('barco_mercante')}" alt="" style="filter:grayscale(.6)">
         <div><h4 style="margin:0">Comprar mercante</h4><div class="sub">${PV.Inv.costHtml(M.cost, null)} · ${L.length}/${M.max}</div></div>
