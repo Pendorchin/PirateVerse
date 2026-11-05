@@ -40,9 +40,10 @@
       PV.Inv.add(S.ship.cargo, k, -1);
       m.f = Math.max(0.3, m.f * 0.97);
       sold++;
+      S.sold = (S.sold || 0) + 1;
     }
     S.doblones += got;
-    if (sold) PV.UI.toast(`Vendiste ${sold} ${D.RES[k].n} por ${got} 💰`, 'good');
+    if (sold) PV.UI.toast(`Vendiste ${sold} ${D.RES[k].n} por ${got} doblones`, 'good');
   }
 
   function buy(k, n) {
@@ -55,7 +56,7 @@
       S.doblones -= p; spent += p; bought++;
       m.f = Math.min(3, m.f * 1.03);
     }
-    if (bought) PV.UI.toast(`Compraste ${bought} ${D.RES[k].n} por ${spent} 💰`, 'good');
+    if (bought) PV.UI.toast(`Compraste ${bought} ${D.RES[k].n} por ${spent} doblones`, 'good');
   }
 
   function upgrade(key) {
@@ -98,9 +99,9 @@
       return `<tr>
         <td><i class="dot" style="background:${D.RES[k].c}"></i> ${D.RES[k].n} ${trend}</td>
         <td>${have}</td>
-        <td>${Port.sellPrice(isl, k)} 💰</td>
+        <td>${Port.sellPrice(isl, k)} <i class="coin"></i></td>
         <td><button data-act="sell" data-k="${k}" data-n="1" ${have ? '' : 'disabled'}>Vender 1</button><button data-act="sell" data-k="${k}" data-n="9999" ${have ? '' : 'disabled'}>Todo</button></td>
-        <td>${Port.buyPrice(isl, k)} 💰</td>
+        <td>${Port.buyPrice(isl, k)} <i class="coin"></i></td>
         <td><button data-act="buy" data-k="${k}" data-n="1">Comprar 1</button><button data-act="buy" data-k="${k}" data-n="10">10</button></td>
       </tr>`;
     }).join('');
@@ -128,7 +129,7 @@
     const missing = Math.ceil(st.maxHp - S.ship.hp), cost = Math.ceil(missing * 0.8);
     return `<div class="upg"><div class="ic">🩹</div><div><h4>Reparar casco</h4>
       <div class="sub">Vida: ${Math.ceil(S.ship.hp)} / ${st.maxHp}. Cerca de tus islas el barco también se repara solo, despacio.</div></div>
-      <button class="primary" data-act="repair" ${missing ? '' : 'disabled'}>${missing ? 'Reparar (' + cost + ' 💰)' : 'Está como nuevo'}</button></div>`;
+      <button class="primary" data-act="repair" ${missing ? '' : 'disabled'}>${missing ? 'Reparar (' + cost + ' doblones)' : 'Está como nuevo'}</button></div>`;
   }
 
   Port.render = function () {
@@ -140,7 +141,7 @@
     const body = Port.tab === 'mercado' ? marketHtml() : Port.tab === 'astillero' ? shipyardHtml() : repairHtml();
     el.innerHTML = `
       <div class="ph"><h2>⚓ ${isl.name}</h2>
-        <div>💰 <b>${U.fmt(S.doblones)}</b> · 📦 ${PV.Inv.cargoTotal()}/${PV.Inv.cargoCap()}</div>
+        <div><i class="coin"></i> <b>${U.fmt(S.doblones)}</b> · <i class="crate"></i> ${PV.Inv.cargoTotal()}/${PV.Inv.cargoCap()}</div>
         <button class="primary" data-act="close">⛵ Zarpar (Esc)</button></div>
       <div class="tabs">${tab('mercado', '🪙 Mercado')}${tab('astillero', '🔨 Astillero')}${tab('reparar', '🩹 Reparar')}</div>
       <div class="pbody">${body}</div>`;

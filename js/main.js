@@ -18,6 +18,7 @@
   resize();
 
   PV.setScene = function (s) {
+    if (PV.scene === 'menu') PV.Tutorial.reset();
     PV.scene = s;
     PV.UI.onScene(s);
   };

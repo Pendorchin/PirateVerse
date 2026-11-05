@@ -6,11 +6,14 @@
   const UI = {};
   let tick = 0, lastToast = '', lastToastT = 0;
 
+  // Atajos visibles: [teclas, descripción]
   const HELP = {
-    sea: 'W/S velas · A/D timón · Q babor · E estribor · F interactuar · Rueda: zoom',
-    port: 'Esc: zarpar',
-    island: '1-5 elegir edificio · R rotar · Clic: construir (arrastrá cintas) · Clic derecho: quitar · WASD cámara · Rueda zoom · Esc zarpar',
+    sea: [[['W', 'S'], 'velas'], [['A', 'D'], 'timón'], [['Q'], 'cañones babor'], [['E'], 'cañones estribor'], [['F'], 'interactuar'], [['Rueda'], 'zoom']],
+    port: [[['Esc'], 'zarpar']],
+    island: [[['1', '5'], 'elegir edificio'], [['R'], 'rotar'], [['Clic'], 'construir (arrastrá cintas)'], [['Clic der.'], 'quitar'],
+      [['W', 'A', 'S', 'D'], 'cámara'], [['Rueda'], 'zoom'], [['Esc'], 'zarpar']],
   };
+  const helpHtml = list => list.map(([keys, label]) => `<span>${keys.map(k => `<kbd>${k}</kbd>`).join(keys.length === 2 && keys[0] === '1' ? '–' : '')} ${label}</span>`).join('');
 
   UI.init = function () {
     $('btnNew').onclick = () => {
@@ -36,7 +39,7 @@
     const bar = $('buildbar');
     bar.innerHTML = Object.keys(D.BUILD).map(k => {
       const d = D.BUILD[k];
-      return `<button data-b="${k}" title="${d.desc}"><b>${d.k}</b><span class="ic">${d.icon}</span>${d.n}<small data-cost="${k}"></small></button>`;
+      return `<button data-b="${k}" title="${d.desc}"><b>${d.k}</b><img class="ic" alt="" src="${PV.Island.thumb(k)}">${d.n}<small data-cost="${k}"></small></button>`;
     }).join('');
     bar.addEventListener('click', e => {
       const b = e.target.closest('button');
@@ -54,7 +57,9 @@
     show('buildbar', s === 'island');
     show('portPanel', s === 'port');
     show('tooltip', false);
-    $('help').textContent = HELP[s] || '';
+    $('help').innerHTML = helpHtml(HELP[s] || []);
+    $('quest').classList.toggle('island', s === 'island');
+    if (s === 'menu') show('quest', false);
     if (s === 'menu') $('btnContinue').disabled = !PV.Save.has();
     tick = 1;
   };
@@ -75,14 +80,14 @@
   function seaPrompt() {
     const isl = PV.Sea.near;
     if (!isl) return '';
-    const key = '<span class="key">F</span>';
+    const key = '<kbd>F</kbd>';
     if (isl.port) return `${key} Entrar a <b>${isl.name}</b>`;
     if (isl.owned) return `${key} Desembarcar en <b>${isl.name}</b>`;
     const res = PV.Sea.islandRes(isl).map(k => D.RES[k].n).join(', ');
     const t = PV.Sea.towersAlive(isl), g = PV.Sea.guardsAlive(isl);
     let line;
     if (t || g) line = `⚔️ Defensas: ${t} torres, ${g} barcos guardianes`;
-    else line = `${key} Fundar fuerte y reclamar la isla (${PV.Sea.conquerCost(isl)} 💰)`;
+    else line = `${key} Fundar fuerte y reclamar la isla (${PV.Sea.conquerCost(isl)} <i class="coin"></i>)`;
     return `<b>${isl.name}</b> · ${'★'.repeat(isl.tier)} ${D.TIERS[isl.tier].n}<br>Recursos: ${res}<br>${line}`;
   }
 
@@ -90,13 +95,13 @@
     const S = PV.state, sh = S.ship, st = PV.Sea.stats();
     const hp = Math.max(0, sh.hp) / st.maxHp;
     const rl = 1 - (sh.rl || 0) / st.reload, rr = 1 - (sh.rr || 0) / st.reload;
-    return `<div class="gold">💰 ${U.fmt(S.doblones)} doblones</div>
-      <div class="bar"><div style="width:${hp * 100}%"></div><span>Casco ${Math.ceil(Math.max(0, sh.hp))} / ${st.maxHp}</span></div>
+    return `<div class="gold"><i class="coin"></i> ${U.fmt(S.doblones)} doblones</div>
+      <div class="bar"><div style="width:${hp * 100}%"></div><span><i class="heart"></i> Casco ${Math.ceil(Math.max(0, sh.hp))} / ${st.maxHp}</span></div>
       <div class="reloads">
-        <div class="bar reload"><div style="width:${rl * 100}%"></div><span>Q Babor</span></div>
-        <div class="bar reload"><div style="width:${rr * 100}%"></div><span>E Estribor</span></div>
+        <div class="bar reload"><div style="width:${rl * 100}%"></div><span>${rl >= 1 ? '● ' : ''}Q Babor</span></div>
+        <div class="bar reload"><div style="width:${rr * 100}%"></div><span>${rr >= 1 ? '● ' : ''}E Estribor</span></div>
       </div>
-      <div class="lbl">📦 Bodega ${PV.Inv.cargoTotal()} / ${st.cap}</div>
+      <div class="lbl"><i class="crate"></i> Bodega ${PV.Inv.cargoTotal()} / ${st.cap}</div>
       <div class="chips">${PV.Inv.chips(sh.cargo)}</div>`;
   }
 
@@ -105,11 +110,11 @@
     if (!isl) return '';
     const cap = Inv.storageCap(isl);
     return `<h3>${isl.name}</h3>
-      <div class="sub">${isl.home ? 'Tu isla inicial' : '★'.repeat(isl.tier) + ' ' + D.TIERS[isl.tier].n} · 💰 ${U.fmt(PV.state.doblones)}</div>
-      <div class="lbl">🏚️ Almacén ${Inv.storageTotal(isl)} / ${cap}</div>
-      ${cap ? '' : '<div class="muted">Construí un almacén (3) para guardar lo que producís.</div>'}
+      <div class="sub">${isl.home ? 'Tu isla inicial' : '★'.repeat(isl.tier) + ' ' + D.TIERS[isl.tier].n} · <i class="coin"></i> ${U.fmt(PV.state.doblones)}</div>
+      <div class="lbl"><i class="crate"></i> Almacén ${Inv.storageTotal(isl)} / ${cap}</div>
+      ${cap ? '' : '<div class="muted">Construí un almacén (<kbd>3</kbd>) para guardar lo que producís.</div>'}
       <div class="chips">${Inv.chips(isl.storage)}</div>
-      <div class="lbl">📦 Bodega del barco ${Inv.cargoTotal()} / ${Inv.cargoCap()}</div>
+      <div class="lbl"><i class="crate"></i> Bodega del barco ${Inv.cargoTotal()} / ${Inv.cargoCap()}</div>
       <div class="chips">${Inv.chips(PV.state.ship.cargo)}</div>`;
   }
 
@@ -136,6 +141,7 @@
       $('prompt').classList.toggle('hidden', !p);
       if (p) $('prompt').innerHTML = p;
     }
+    if (s !== 'menu') PV.Tutorial.update();
     if (s === 'island') {
       $('islandInfo').innerHTML = islandInfo();
       document.querySelectorAll('#buildbar small[data-cost]').forEach(el => {

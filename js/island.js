@@ -542,6 +542,23 @@
     }
   }
 
+  // Miniatura de un edificio (para la barra de construcción), con el mismo dibujo que en el juego.
+  Isl.thumb = function (type) {
+    const def = D.BUILD[type], size = 64, cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    const ctx = cv.getContext('2d');
+    const s = size / (Math.max(def.w, def.h) * T + 8);
+    ctx.scale(s, s);
+    ctx.translate(4, 4);
+    const b = { type, x: 0, y: 0, dir: 0, id: 0.6, items: [] };
+    if (type === 'cinta') {
+      drawBelt(ctx, b, 0.3);
+      drawArrow(ctx, b);
+      drawItem(ctx, T * 0.5, T * 0.5, 'cobre');
+    } else drawMachine(ctx, b, null, 0);
+    return cv.toDataURL();
+  };
+
   Isl.render = function (ctx) {
     const isl = Isl.cur, c = Isl.cam, t = PV.time, g = isl.grid;
     ctx.fillStyle = '#1d5f8a'; ctx.fillRect(0, 0, PV.W, PV.H);

@@ -158,6 +158,7 @@
     floatText(tw.x, tw.y - 20, '-' + dmg, '#ffcc66');
     if (tw.hp <= 0) {
       tw.hp = 0;
+      PV.state.towersKilled = (PV.state.towersKilled || 0) + 1;
       explosion(tw.x, tw.y, 35);
       loot(isl.tier, tw.x, tw.y);
       PV.UI.toast('¡Torre destruida!', 'good');

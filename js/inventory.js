@@ -58,7 +58,7 @@
   Inv.costHtml = function (cost, isl) {
     return Object.keys(cost).map(k => {
       const ok = k === 'doblones' ? PV.state.doblones >= cost[k] : Inv.have(k, isl) >= cost[k];
-      const name = k === 'doblones' ? '💰' : D.RES[k].n;
+      const name = k === 'doblones' ? '<i class="coin"></i>' : D.RES[k].n;
       return `<span class="cost ${ok ? '' : 'miss'}">${cost[k]} ${name}</span>`;
     }).join(' · ');
   };

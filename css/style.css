@@ -15,17 +15,42 @@ canvas#game { display: block; position: fixed; inset: 0; }
 
 button {
   font: inherit; font-size: 14px; cursor: pointer; padding: 6px 10px; border-radius: 6px;
-  border: 1px solid var(--wood); background: #e9d6a8; color: var(--ink);
+  border: 1px solid var(--wood); color: var(--ink);
+  background: linear-gradient(#f3e3b8, #dcc48f);
+  box-shadow: 0 2px 0 #7a5530, inset 0 1px 0 rgba(255,255,255,.6);
 }
-button:hover:not(:disabled) { background: #f6e7bf; }
+button:hover:not(:disabled) { background: linear-gradient(#fbefcb, #e6d09f); }
+button:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 0 #7a5530; }
 button:disabled { opacity: .45; cursor: default; }
-button.primary { background: var(--wood); color: #f8e9c6; border-color: #2e1c0c; }
-button.primary:hover { background: #774d28; }
+button.primary { background: linear-gradient(#7a4f29, #4f3218); color: #f8e9c6; border-color: #2e1c0c; box-shadow: 0 2px 0 #24150a, inset 0 1px 0 rgba(255,220,160,.35); }
+button.primary:hover:not(:disabled) { background: linear-gradient(#8c5c31, #5c3a1c); }
 button.wide { width: 100%; margin-top: 8px; }
 
+/* Paneles: pergamino con marco de madera */
 .box, .panel {
-  background: rgba(242, 228, 196, .94); border: 2px solid var(--wood); border-radius: 10px;
-  box-shadow: 0 6px 20px rgba(0,0,0,.4);
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(255,250,230,.55), transparent 60%),
+    radial-gradient(ellipse at 80% 90%, rgba(170,130,70,.18), transparent 55%),
+    linear-gradient(#f4e6c6, #e8d4a6);
+  border: 4px solid #5a3a1e; border-radius: 10px;
+  box-shadow: 0 0 0 2px #2e1c0c, inset 0 0 0 2px #b8925a, inset 0 0 18px rgba(110,70,20,.25), 0 8px 24px rgba(0,0,0,.45);
+}
+
+/* Íconos dibujados con CSS */
+.coin {
+  display: inline-block; width: 1em; height: 1em; border-radius: 50%; vertical-align: -0.14em;
+  background: radial-gradient(circle at 35% 30%, #fff3b0, #f1c40f 45%, #b7860b);
+  box-shadow: inset 0 0 0 1.5px #8a6408;
+}
+.heart { display: inline-block; width: .8em; height: .8em; background: #c0392b; transform: rotate(45deg); position: relative; margin: 0 .25em 0 .1em; vertical-align: -0.05em; }
+.heart::before, .heart::after { content: ''; position: absolute; width: .8em; height: .8em; border-radius: 50%; background: #c0392b; }
+.heart::before { left: -.4em; } .heart::after { top: -.4em; }
+.crate { display: inline-block; width: .95em; height: .95em; vertical-align: -0.12em; border: 2px solid #5e3b1c; border-radius: 2px;
+  background: linear-gradient(45deg, transparent 44%, #5e3b1c 44%, #5e3b1c 56%, transparent 56%), #b07a42; }
+kbd {
+  display: inline-block; min-width: 1.6em; padding: 1px 5px; border-radius: 4px; text-align: center;
+  font: bold 12px/1.4 Georgia, serif; color: var(--ink);
+  background: linear-gradient(#fff6dc, #e2cc98); border: 1px solid #7a5530; box-shadow: 0 2px 0 #7a5530;
 }
 
 /* HUD */
@@ -44,12 +69,29 @@ button.wide { width: 100%; margin-top: 8px; }
 .lbl { font-weight: bold; margin-top: 6px; font-size: 13px; }
 
 #prompt {
-  position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%);
+  position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%);
   background: rgba(20, 12, 5, .82); color: #f8e9c6; padding: 10px 18px; border-radius: 8px;
   border: 1px solid var(--gold); text-align: center; font-size: 15px; pointer-events: none; max-width: 90vw;
 }
 #prompt .key { display: inline-block; background: var(--gold); color: var(--ink); border-radius: 4px; padding: 0 6px; font-weight: bold; }
-#help { position: fixed; left: 12px; bottom: 10px; color: rgba(255,255,255,.75); font-size: 13px; text-shadow: 0 1px 2px #000; pointer-events: none; }
+#help {
+  position: fixed; left: 12px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px 12px; max-width: calc(100vw - 24px);
+  color: #f8e9c6; font-size: 12px; pointer-events: none;
+  background: rgba(20,12,5,.72); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(224,180,76,.45);
+}
+#help span { white-space: nowrap; }
+#hud #stats .gold { font-family: 'Pirata One', Georgia, serif; font-weight: normal; font-size: 24px; letter-spacing: .5px; }
+
+/* Objetivos (mini tutorial) */
+#quest { position: fixed; right: 12px; top: 194px; width: 250px; padding: 10px 12px; font-size: 14px; }
+#quest.island { top: 12px; }
+#quest h4 { margin: 0 0 4px; font-family: 'Pirata One', Georgia, serif; font-weight: normal; font-size: 20px; display: flex; justify-content: space-between; align-items: baseline; }
+#quest h4 small { font-family: Georgia, serif; font-size: 12px; color: #6b5232; }
+#quest .qtext { line-height: 1.35; }
+#quest .qhint { font-size: 12px; color: #6b5232; margin-top: 4px; font-style: italic; }
+#quest .qbar { height: 5px; background: rgba(90,58,30,.2); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+#quest .qbar div { height: 100%; background: var(--gold); }
+#quest button { position: absolute; right: 6px; bottom: 6px; padding: 0 6px; font-size: 11px; box-shadow: none; }
 
 /* Island */
 #islandPanel { position: fixed; left: 12px; top: 12px; width: 270px; padding: 10px 12px; max-height: calc(100vh - 140px); overflow: auto; }
@@ -58,11 +100,11 @@ button.wide { width: 100%; margin-top: 8px; }
 #islandPanel .row button { flex: 1; font-size: 13px; padding: 6px 4px; }
 .sub { color: #6b5232; font-size: 13px; }
 
-#buildbar { position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%); display: flex; gap: 6px; }
+#buildbar { position: fixed; left: 50%; bottom: 48px; transform: translateX(-50%); display: flex; gap: 6px; }
 #buildbar button { display: flex; flex-direction: column; align-items: center; min-width: 96px; padding: 6px 8px; background: rgba(242,228,196,.95); }
 #buildbar button.sel { background: var(--gold); box-shadow: 0 0 0 2px #fff inset; }
 #buildbar button b { font-size: 11px; align-self: flex-start; }
-#buildbar button .ic { font-size: 22px; line-height: 1.1; }
+#buildbar button .ic { width: 40px; height: 40px; image-rendering: auto; margin: 2px 0; }
 #buildbar button small { font-size: 11px; }
 
 #tooltip { position: fixed; pointer-events: none; background: rgba(20,12,5,.88); color: #f8e9c6; padding: 6px 10px; border-radius: 6px; font-size: 13px; max-width: 260px; border: 1px solid rgba(224,180,76,.6); }
