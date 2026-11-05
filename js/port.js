@@ -46,6 +46,19 @@
     if (sold) PV.UI.toast(`Vendiste ${sold} ${D.RES[k].n} por ${got} doblones`, 'good');
   }
 
+  // Vende todo lo de la bodega menos la munición.
+  const AMMO_KEYS = D.AMMO.map(a => a.k);
+  function sellCargo() {
+    const S = PV.state, cargo = S.ship.cargo, keep = {};
+    for (const k of AMMO_KEYS) if (cargo[k]) { keep[k] = cargo[k]; delete cargo[k]; }
+    const n = PV.Inv.sum(cargo);
+    const got = Port.sellAll(Port.isl, cargo);
+    Object.assign(cargo, keep);
+    S.doblones += got;
+    S.sold = (S.sold || 0) + n;
+    if (n) PV.UI.toast(`Vendiste ${n} unidades por ${got} doblones`, 'good');
+  }
+
   // Venta automática de una bodega entera (la usan los mercantes).
   Port.sellAll = function (isl, cargo) {
     let got = 0;
@@ -95,6 +108,7 @@
     if (a === 'close') return Port.close();
     if (a === 'tab') Port.tab = el.dataset.tab;
     else if (a === 'sell') sell(el.dataset.k, +el.dataset.n);
+    else if (a === 'sellall') sellCargo();
     else if (a === 'buy') buy(el.dataset.k, +el.dataset.n);
     else if (a === 'up') upgrade(el.dataset.k);
     else if (a === 'buyship') PV.Fleet.buy(Port.isl);
@@ -118,7 +132,11 @@
         <td><button data-act="buy" data-k="${k}" data-n="1">Comprar 1</button><button data-act="buy" data-k="${k}" data-n="10">10</button></td>
       </tr>`;
     }).join('');
-    return `<p class="muted">Cada puerto paga distinto. Si vendés mucho de algo, el precio baja (y se recupera con el tiempo).</p>
+    const sellable = Object.keys(cargo).filter(k => !AMMO_KEYS.includes(k));
+    const est = sellable.reduce((t, k) => t + Port.sellPrice(isl, k) * cargo[k], 0);
+    return `<div class="sellall"><button class="primary" data-act="sellall" ${sellable.length ? '' : 'disabled'}>Vender toda la bodega</button>
+        <span class="muted">${sellable.length ? `≈ ${U.fmt(est)} <i class="coin"></i> · la munición no se vende` : 'No hay nada para vender.'}</span></div>
+      <p class="muted">Cada puerto paga distinto. Si vendés mucho de algo, el precio baja (y se recupera con el tiempo).</p>
       <table class="market"><tr><th>Recurso</th><th>En bodega</th><th>Te pagan</th><th></th><th>Cuesta</th><th></th></tr>${rows}</table>`;
   }
 
