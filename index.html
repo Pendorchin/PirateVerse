@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PirateVerse</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Pirata+One&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" class="hidden"><div id="stats" class="box"></div></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="help" class="hidden"></div>
+
+  <div id="islandPanel" class="panel hidden">
+    <div id="islandInfo"></div>
+    <div class="row">
+      <button data-act="load">⬆ Cargar al barco</button>
+      <button data-act="unload">⬇ Descargar barco</button>
+    </div>
+    <button data-act="leave" class="primary wide">⛵ Zarpar (Esc)</button>
+  </div>
+  <div id="buildbar" class="hidden"></div>
+  <div id="tooltip" class="hidden"></div>
+
+  <div id="portPanel" class="panel big hidden"></div>
+  <div id="toasts"></div>
+
+  <div id="menu">
+    <div class="menu-card">
+      <h1>PirateVerse</h1>
+      <p class="sub">Navegá, conquistá y automatizá el archipiélago</p>
+      <button id="btnNew" class="primary">Nueva partida</button>
+      <button id="btnContinue">Continuar partida</button>
+      <div class="controls">
+        <div><b>En el mar</b><br>W/S velas · A/D timón<br>Q babor · E estribor (cañones)<br>F interactuar · Rueda zoom</div>
+        <div><b>En la isla</b><br>1-5 elegir edificio · R rotar<br>Clic: construir (arrastrá cintas)<br>Clic derecho: quitar · WASD cámara</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/util.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/inventory.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/island.js"></script>
+  <script src="js/sea.js"></script>
+  <script src="js/port.js"></script>
+  <script src="js/save.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
