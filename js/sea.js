@@ -263,7 +263,8 @@
       for (const isl of S.islands) {
         if (!isl.owned || !isl.grid) continue;
         if (U.dist(sh.x, sh.y, isl.x, isl.y) > isl.R + 220) { isl._docked = false; continue; }
-        const r = PV.Island.dockSync(isl);
+        // Lo marcado en el muelle se baja una sola vez, al llegar desde lejos.
+        const r = PV.Island.dockSync(isl, !isl._docked);
         if (r.loaded || r.unloaded) {
           if (!isl._docked) PV.UI.toast(`Muelle de ${isl.name}: ${r.loaded} cargados, ${r.unloaded} descargados.`, 'good');
           else floatText(sh.x, sh.y - 30, `+${r.loaded} ⚓`, '#fff');

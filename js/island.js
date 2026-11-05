@@ -298,11 +298,13 @@
     return moved;
   };
 
-  // Barco del jugador cerca de la isla: carga lo del muelle y descarga lo marcado.
-  Isl.dockSync = function (isl) {
+  // Barco del jugador cerca de la isla: carga lo del muelle. Lo marcado se baja solo
+  // si unload es true (al llegar o desembarcar), así no deshace lo que cargaste a mano.
+  Isl.dockSync = function (isl, unload) {
     const Inv = PV.Inv, S = PV.state;
     const loaded = Isl.takeFromDocks(isl, S.ship.cargo, Inv.cargoCap() - Inv.cargoTotal());
     let unloaded = 0;
+    if (!unload) return { loaded, unloaded };
     const marks = new Set();
     for (const d of Isl.docks(isl)) for (const k of d.unload || []) marks.add(k);
     let free = Inv.storageCap(isl) - Inv.storageTotal(isl);
@@ -326,7 +328,8 @@
     Isl.cam.z = U.clamp(Math.min(PV.W / (g.w * T), PV.H / (g.h * T)) * 1.05, 0.5, 1.4);
     PV.state.ship.v = 0;
     PV.setScene('island');
-    const r = Isl.dockSync(isl);
+    const r = Isl.dockSync(isl, true);
+    isl._docked = true;  // al zarpar no se vuelve a descargar hasta irse y volver
     if (r.loaded || r.unloaded) PV.UI.toast(`Muelle: ${r.loaded} cargados al barco, ${r.unloaded} descargados.`, 'good');
   };
 

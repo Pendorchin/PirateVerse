@@ -91,7 +91,7 @@
       html: Object.keys(D.RECIPES.herreria).map(k => opt(k, PV.Island.recipeTxt(D.RECIPES.herreria[k]), b.recipe === k)).join('') }),
     taller: b => ({ title: '🧵 Taller: receta', sub: '',
       html: Object.keys(D.RECIPES.taller).map(k => opt(k, PV.Island.recipeTxt(D.RECIPES.taller[k]), b.recipe === k)).join('') }),
-    muelle: b => ({ title: '⚓ Muelle: descargar del barco', sub: 'Lo marcado se baja solo al almacén de la isla cuando llegás. Lo que trae el sendero se carga solo.',
+    muelle: b => ({ title: '⚓ Muelle: al llegar, bajar del barco…', sub: 'Lo que marques se baja solo al almacén una vez, cuando llegás a la isla o desembarcás. Lo que cargues a mano después no se toca. (Lo que traen los senderos al muelle se sube solo al barco.)',
       html: resOpts(k => b.unload.includes(k)), multi: true }),
   };
 
