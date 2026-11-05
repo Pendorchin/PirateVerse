@@ -30,6 +30,7 @@
       v: 1, seed, doblones: 400, nextId: 1, time: 0, islands,
       ship: { x: home.x + home.R + 140, y: home.y, a: 0, v: 0, hp: 100, up: { bodega: 0, casco: 0, canones: 0, velas: 0 }, cargo: {} },
       fog: new Array(PV.World.FOG_N * PV.World.FOG_N).fill(0),
+      fleet: [],
     };
   }
 
@@ -40,7 +41,7 @@
     PV.setScene('sea');
     PV.Save.save();
     PV.UI.toast('¡Bienvenido, capitán! Acercate a Isla Refugio y apretá F para desembarcar.', 'good');
-    setTimeout(() => PV.UI.toast('Construí extractores sobre los yacimientos y conectalos con cintas a un almacén.'), 4000);
+    setTimeout(() => PV.UI.toast('Abrí minas sobre los yacimientos y trazá senderos hasta un almacén: tus porteadores llevan la carga.'), 4000);
     setTimeout(() => PV.UI.toast('Vendé en los puertos ⚓ y mejorá tu barco para llegar a islas más raras.'), 8000);
   };
 
@@ -48,7 +49,11 @@
     const s = PV.Save.load();
     if (!s) return;
     PV.state = s;
-    for (const isl of s.islands) if (isl.grid) PV.Island.rebuildOcc(isl);
+    for (const isl of s.islands) {
+      if (isl.grid) PV.Island.rebuildOcc(isl);
+      // Partidas viejas: precios para los recursos nuevos.
+      if (isl.port) for (const k in PV.D.RES) if (!isl.market[k]) isl.market[k] = { m: 1, f: 1 };
+    }
     PV.Sea.init();
     PV.setScene('sea');
     PV.UI.toast('Partida cargada.', 'good');
@@ -81,6 +86,7 @@
       PV.state.time += dt;
       PV.Island.updateAll(dt);
       PV.Port.update(dt);
+      PV.Fleet.update(dt);
       if (PV.scene === 'sea') PV.Sea.update(dt);
       if (PV.scene === 'island') { PV.Island.update(dt); PV.Island.render(ctx); }
       else PV.Sea.render(ctx);

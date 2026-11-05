@@ -44,12 +44,20 @@
         if (g.res[ty * g.w + tx]) res++;
       }
     }
+    if (type === 'muelle') return touchesWater(isl, x, y, def);
     return type !== 'extractor' || res > 0;
   };
 
+  function touchesWater(isl, x, y, def) {
+    for (let j = -1; j <= def.h; j++) for (let i = -1; i <= def.w; i++) {
+      if (!landAt(isl, x + i, y + j)) return true;
+    }
+    return false;
+  }
+
   function tryPlace(isl, type, x, y, dir, quiet) {
     if (!Isl.canPlace(isl, type, x, y)) {
-      if (!quiet) PV.UI.toast(type === 'extractor' ? 'El extractor tiene que ir sobre un yacimiento.' : 'No se puede construir ahí.', 'bad');
+      if (!quiet) PV.UI.toast(type === 'extractor' ? 'La mina tiene que ir sobre un yacimiento.' : type === 'muelle' ? 'El muelle tiene que tocar el agua.' : 'No se puede construir ahí.', 'bad');
       return null;
     }
     const cost = D.BUILD[type].cost;
@@ -61,6 +69,10 @@
     if (type === 'extractor') b.ri = 0;
     if (type === 'fundicion') { b.ore = null; b.oreN = 0; b.fuel = 0; }
     if (type === 'aserradero') b.n = 0;
+    if (type === 'clasificador') { b.filter = null; b.hold = null; }
+    if (type === 'insertador') { b.filter = null; b.hand = null; }
+    if (D.RECIPES[type]) { b.recipe = Object.keys(D.RECIPES[type])[0]; b.inv = {}; }
+    if (type === 'muelle') { b.store = {}; b.unload = []; }
     isl.buildings.push(b);
     mark(isl, b, b);
     return b;
@@ -75,7 +87,10 @@
     if (b.out) back.push(...b.out);
     for (let i = 0; i < (b.oreN || 0); i++) back.push(b.ore);
     for (let i = 0; i < (b.n || 0); i++) back.push('madera');
+    if (b.hold) back.push(b.hold);
+    if (b.hand) back.push(b.hand);
     for (const k of back) PV.Inv.add(isl.storage, k, 1);
+    for (const bag of [b.inv, b.store]) if (bag) for (const k in bag) PV.Inv.add(isl.storage, k, bag[k]);
   }
 
   function removeAt(isl, x, y) {
@@ -92,34 +107,64 @@
     return [b.x + half + dx * (half + 1), b.y + half + dy * (half + 1)];
   }
 
-  function beltInsert(belt, item) {
+  function beltInsert(belt, item, dry) {
     const last = belt.items[belt.items.length - 1];
     if (last && last.p < GAP) return false;
-    belt.items.push({ t: item, p: 0 });
+    if (!dry) belt.items.push({ t: item, p: 0 });
     return true;
   }
 
-  function accept(isl, b, item) {
+  // ¿El edificio b recibe este objeto? Con dry solo pregunta, sin guardarlo.
+  function accept(isl, b, item, dry) {
     switch (b.type) {
       case 'almacen':
         if (PV.Inv.storageTotal(isl) >= PV.Inv.storageCap(isl)) return false;
-        PV.Inv.add(isl.storage, item, 1);
+        if (!dry) PV.Inv.add(isl.storage, item, 1);
         return true;
       case 'fundicion':
-        if (D.SMELT[item] && (b.oreN === 0 || b.ore === item) && b.oreN < 10) { b.ore = item; b.oreN++; return true; }
-        if (D.FUEL[item] && b.fuel < 6) { b.fuel += D.FUEL[item]; return true; }
+        if (D.SMELT[item] && (b.oreN === 0 || b.ore === item) && b.oreN < 10) { if (!dry) { b.ore = item; b.oreN++; } return true; }
+        if (D.FUEL[item] && b.fuel < 6) { if (!dry) b.fuel += D.FUEL[item]; return true; }
         return false;
       case 'aserradero':
-        if (item === 'madera' && b.n < 10) { b.n++; return true; }
+        if (item === 'madera' && b.n < 10) { if (!dry) b.n++; return true; }
         return false;
+      case 'clasificador':
+        if (b.hold) return false;
+        if (!dry) b.hold = item;
+        return true;
+      case 'herreria': case 'taller': {
+        const need = D.RECIPES[b.type][b.recipe].in[item];
+        if (!need || (b.inv[item] || 0) >= need * 3) return false;
+        if (!dry) PV.Inv.add(b.inv, item, 1);
+        return true;
+      }
+      case 'muelle':
+        if (PV.Inv.sum(b.store) >= D.DOCK_CAP) return false;
+        if (!dry) PV.Inv.add(b.store, item, 1);
+        return true;
     }
     return false;
   }
 
-  function give(isl, from, x, y, item) {
+  function give(isl, from, x, y, item, dry) {
     const t = occAt(isl, x, y);
     if (!t || t === from) return false;
-    return t.type === 'cinta' ? beltInsert(t, item) : accept(isl, t, item);
+    return t.type === 'cinta' ? beltInsert(t, item, dry) : accept(isl, t, item, dry);
+  }
+
+  // El estibador toma de lo que tiene atrás algo que lo de adelante acepte.
+  function grab(isl, b, src, fx, fy) {
+    const ok = k => (!b.filter || b.filter === k) && give(isl, b, fx, fy, k, true);
+    if (src.type === 'cinta') {
+      const it = src.items[0];
+      if (it && it.p >= 0.7 && ok(it.t)) { src.items.shift(); return it.t; }
+    } else if (src.type === 'almacen' || src.type === 'muelle') {
+      const bag = src.type === 'almacen' ? isl.storage : src.store;
+      for (const k of Object.keys(bag)) if (ok(k)) { PV.Inv.add(bag, k, -1); return k; }
+    } else if (src.out && src.out.length && ok(src.out[0])) {
+      return src.out.shift();
+    }
+    return null;
   }
 
   function pushOut(isl, b) {
@@ -174,6 +219,41 @@
         }
         pushOut(isl, b);
         break;
+      case 'clasificador': {
+        if (!b.hold) break;
+        const pass = !b.filter || b.hold === b.filter;
+        for (const d of pass ? [b.dir] : [(b.dir + 1) % 4, (b.dir + 3) % 4]) {
+          const [dx, dy] = DIRS[d];
+          if (give(isl, b, b.x + dx, b.y + dy, b.hold)) { b.hold = null; break; }
+        }
+        break;
+      }
+      case 'insertador': {
+        const [dx, dy] = DIRS[b.dir];
+        if (!b.hand) {
+          const src = occAt(isl, b.x - dx, b.y - dy);
+          b.prog = 0;
+          if (src && src !== b) b.hand = grab(isl, b, src, b.x + dx, b.y + dy);
+        } else {
+          b.prog = Math.min(1, b.prog + dt / 0.7);
+          if (b.prog >= 1 && give(isl, b, b.x + dx, b.y + dy, b.hand)) { b.hand = null; b.prog = 0; }
+        }
+        break;
+      }
+      case 'herreria': case 'taller': {
+        const r = D.RECIPES[b.type][b.recipe];
+        b.on = b.out.length < 4 && Object.keys(r.in).every(k => (b.inv[k] || 0) >= r.in[k]);
+        if (b.on) {
+          b.prog += dt / r.t;
+          if (b.prog >= 1) {
+            b.prog = 0;
+            for (const k in r.in) PV.Inv.add(b.inv, k, -r.in[k]);
+            for (let i = 0; i < r.n; i++) b.out.push(r.out);
+          }
+        }
+        pushOut(isl, b);
+        break;
+      }
       case 'cinta': {
         const its = b.items;
         for (let i = 0; i < its.length; i++) {
@@ -197,6 +277,40 @@
     }
   };
 
+  // ---------- Muelles ----------
+
+  Isl.docks = isl => isl.buildings.filter(b => b.type === 'muelle');
+
+  // Pasa la carga de los muelles a una bodega (cargo) con lugar libre "room".
+  Isl.takeFromDocks = function (isl, cargo, room) {
+    let moved = 0;
+    for (const d of Isl.docks(isl)) {
+      for (const k of Object.keys(d.store)) {
+        const n = Math.min(room - moved, d.store[k]);
+        if (n <= 0) return moved;
+        PV.Inv.add(d.store, k, -n); PV.Inv.add(cargo, k, n); moved += n;
+      }
+    }
+    return moved;
+  };
+
+  // Barco del jugador cerca de la isla: carga lo del muelle y descarga lo marcado.
+  Isl.dockSync = function (isl) {
+    const Inv = PV.Inv, S = PV.state;
+    const loaded = Isl.takeFromDocks(isl, S.ship.cargo, Inv.cargoCap() - Inv.cargoTotal());
+    let unloaded = 0;
+    const marks = new Set();
+    for (const d of Isl.docks(isl)) for (const k of d.unload || []) marks.add(k);
+    let free = Inv.storageCap(isl) - Inv.storageTotal(isl);
+    for (const k of marks) {
+      const n = Math.min(free, S.ship.cargo[k] || 0);
+      if (n <= 0) continue;
+      Inv.add(S.ship.cargo, k, -n); Inv.add(isl.storage, k, n);
+      free -= n; unloaded += n;
+    }
+    return { loaded, unloaded };
+  };
+
   // ---------- Entrar / salir ----------
 
   Isl.enter = function (isl) {
@@ -208,6 +322,8 @@
     Isl.cam.z = U.clamp(Math.min(PV.W / (g.w * T), PV.H / (g.h * T)) * 1.05, 0.5, 1.4);
     PV.state.ship.v = 0;
     PV.setScene('island');
+    const r = Isl.dockSync(isl);
+    if (r.loaded || r.unloaded) PV.UI.toast(`Muelle: ${r.loaded} cargados al barco, ${r.unloaded} descargados.`, 'good');
   };
 
   Isl.leave = function () {
@@ -309,8 +425,13 @@
         else removeAt(isl, tx, ty);
       }
     } else if (type === 'down') {
+      PV.UI.closeChooser();
       if (e.button === 1) { Isl.pan = [e.clientX, e.clientY]; e.preventDefault(); }
       else if (e.button === 2) { removeAt(isl, tx, ty); Isl.drag = { mode: 'remove' }; }
+      else if (e.button === 0 && !Isl.sel) {
+        const b = occAt(isl, tx, ty);
+        if (b && PV.UI.CHOOSE[b.type]) PV.UI.chooser(b, e.clientX, e.clientY);
+      }
       else if (e.button === 0 && Isl.sel) {
         if (Isl.sel === 'cinta') {
           const ex = occAt(isl, tx, ty);
@@ -346,6 +467,9 @@
     return tot;
   }
 
+  const recipeTxt = r => Object.keys(r.in).map(k => r.in[k] + ' ' + D.RES[k].n).join(' + ') + ' → ' + r.n + ' ' + D.RES[r.out].n;
+  Isl.recipeTxt = recipeTxt;
+
   Isl.tooltip = function () {
     const isl = Isl.cur;
     if (!isl || !Isl.hover) return '';
@@ -358,16 +482,26 @@
       if (b.type === 'extractor') {
         const tot = resUnder(isl, b), keys = Object.keys(tot);
         s += keys.length ? keys.map(k => `${D.RES[k].n}: quedan ${tot[k]}`).join('<br>') : '<span style="color:#e74c3c">Yacimiento agotado</span>';
-        if (b.out.length) s += '<br><i>Salida bloqueada: conectá una cinta o un almacén a la flecha.</i>';
+        if (b.out.length) s += '<br><i>Esperando: poné un sendero o un almacén en la flecha.</i>';
       } else if (b.type === 'fundicion') {
         s += `Mineral: ${b.oreN ? D.RES[b.ore].n + ' ×' + b.oreN : '—'}<br>Combustible: ${b.fuel}`;
         s += b.on ? '<br>🔥 Fundiendo…' : '<br><i>Necesita 2 minerales y combustible (madera o carbón).</i>';
       } else if (b.type === 'aserradero') {
-        s += `Madera: ${b.n}` + (b.on ? '<br>🪚 Cortando…' : '<br><i>Mandale madera por una cinta.</i>');
+        s += `Madera: ${b.n}` + (b.on ? '<br>🪚 Cortando…' : '<br><i>Mandale madera por un sendero.</i>');
       } else if (b.type === 'almacen') {
         s += `Almacén de la isla: ${PV.Inv.storageTotal(isl)} / ${PV.Inv.storageCap(isl)}`;
       } else if (b.type === 'cinta') {
-        s += `Objetos: ${b.items.length}`;
+        s += `Porteadores con carga: ${b.items.length}`;
+      } else if (b.type === 'clasificador') {
+        s += `Sigue derecho: <b>${b.filter ? D.RES[b.filter].n : 'todo'}</b><br>El resto sale por los costados.<br><i>Clic para elegir.</i>`;
+      } else if (b.type === 'insertador') {
+        s += `Agarra: <b>${b.filter ? D.RES[b.filter].n : 'cualquier cosa'}</b>` + (b.hand ? `<br>Lleva: ${D.RES[b.hand].n}` : '') + '<br><i>Clic para filtrar.</i>';
+      } else if (D.RECIPES[b.type]) {
+        const r = D.RECIPES[b.type][b.recipe];
+        s += `Receta: <b>${recipeTxt(r)}</b><br>Tiene: ${Object.keys(r.in).map(k => D.RES[k].n + ' ' + (b.inv[k] || 0) + '/' + r.in[k]).join(', ')}`;
+        s += b.on ? '<br>🔨 Trabajando…' : '<br><i>Clic para cambiar la receta.</i>';
+      } else if (b.type === 'muelle') {
+        s += `Carga esperando: ${PV.Inv.sum(b.store)} / ${D.DOCK_CAP}` + (b.unload.length ? `<br>Descarga del barco: ${b.unload.map(k => D.RES[k].n).join(', ')}` : '') + '<br><i>Clic para elegir qué descargar.</i>';
       }
       return s + '<br><span style="opacity:.7">R rotar · clic derecho quitar</span>';
     }
@@ -399,65 +533,123 @@
     ctx.restore();
   }
 
-  function drawBelt(ctx, b, t) {
+  // Persona vista desde arriba, mirando hacia el ángulo a.
+  function drawPerson(ctx, x, y, a, shirt, swing, hat) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+    ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.ellipse(1.5, 2, 5, 6.5, 0, 0, TAU); ctx.fill();
+    const sw = Math.sin(swing || 0) * 2.5;
+    ctx.fillStyle = '#d9a877';
+    ctx.beginPath(); ctx.arc(1 + sw, -5.2, 1.8, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(1 - sw, 5.2, 1.8, 0, TAU); ctx.fill();
+    ctx.fillStyle = shirt; ctx.beginPath(); ctx.ellipse(0, 0, 3.6, 5.4, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#d9a877'; ctx.beginPath(); ctx.arc(0.5, 0, 2.8, 0, TAU); ctx.fill();
+    ctx.fillStyle = hat || '#5a3a1e'; ctx.beginPath(); ctx.arc(-0.3, 0, 2.6, Math.PI * 0.5, Math.PI * 1.5); ctx.fill();
+    ctx.restore();
+  }
+
+  // Trabajador con herramienta (pico, hacha, martillo) que se mueve si está trabajando.
+  function drawWorker(ctx, x, y, a, shirt, swing, tool) {
+    drawPerson(ctx, x, y, a, shirt, 0);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a + Math.sin(swing) * 0.7);
+    ctx.strokeStyle = '#6d4c2a'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(2, 4); ctx.lineTo(12, 4); ctx.stroke();
+    ctx.fillStyle = tool === 'hacha' ? '#b0b6bb' : '#7d858c';
+    if (tool === 'pico') ctx.fillRect(11, -0.5, 2.5, 9);
+    else if (tool === 'hacha') ctx.fillRect(10, 4, 4, 4);
+    else ctx.fillRect(10.5, 1, 4, 6);
+    ctx.restore();
+  }
+
+  function drawBundle(ctx, x, y, k, s) {
+    s = s || 4.5;
+    ctx.fillStyle = D.RES[k].c; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1.2;
+    rrect(ctx, x - s, y - s, s * 2, s * 2, 2.5); ctx.fill(); ctx.stroke();
+  }
+
+  // Porteador caminando con un bulto en la cabeza.
+  function drawPorter(ctx, x, y, dir, k, t) {
+    drawPerson(ctx, x, y, dir * Math.PI / 2, '#8a6d4a', t * 9 + (x + y) * 0.3);
+    drawBundle(ctx, x, y, k);
+  }
+
+  // Sendero de tierra (la "cinta"): marcas de pisadas hacia la flecha.
+  function drawBelt(ctx, b) {
+    const px = b.x * T, py = b.y * T;
+    ctx.fillStyle = '#b8925f'; ctx.fillRect(px, py, T, T);
     ctx.save();
-    ctx.translate(b.x * T + T / 2, b.y * T + T / 2);
+    ctx.translate(px + T / 2, py + T / 2);
     ctx.rotate(b.dir * Math.PI / 2);
-    ctx.fillStyle = '#2b2b2b'; ctx.fillRect(-T / 2, -T / 2 + 3, T, T - 6);
-    ctx.fillStyle = '#474747'; ctx.fillRect(-T / 2, -T / 2 + 6, T, T - 12);
-    ctx.beginPath(); ctx.rect(-T / 2, -T / 2, T, T); ctx.clip();
-    ctx.strokeStyle = 'rgba(241,196,15,0.55)'; ctx.lineWidth = 2;
-    const ph = ((t * BELT_SPEED) % 1) * T;
-    ctx.beginPath();
-    for (let k = -1; k < 2; k++) {
-      const x = -T / 2 + ph + k * (T / 2);
-      ctx.moveTo(x - 4, -6); ctx.lineTo(x + 2, 0); ctx.lineTo(x - 4, 6);
+    ctx.fillStyle = 'rgba(80,55,25,0.25)';
+    ctx.fillRect(-T / 2, -T / 2, T, 3); ctx.fillRect(-T / 2, T / 2 - 3, T, 3);
+    ctx.fillStyle = 'rgba(120,90,50,0.6)';
+    for (let i = 0; i < 3; i++) {
+      const h = U.hash(b.x * 7 + i, b.y * 13 - i);
+      ctx.beginPath(); ctx.arc(-12 + h * 24, -9 + U.hash(b.y + i, b.x) * 18, 1.4, 0, TAU); ctx.fill();
     }
+    ctx.strokeStyle = 'rgba(90,60,30,0.35)'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (const x of [-6, 6]) { ctx.moveTo(x - 3, -5); ctx.lineTo(x + 2, 0); ctx.lineTo(x - 3, 5); }
     ctx.stroke();
     ctx.restore();
   }
 
-  function drawItem(ctx, x, y, k) {
-    ctx.fillStyle = D.RES[k].c;
-    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(x, y, 6, 0, TAU); ctx.fill(); ctx.stroke();
+  function drawItem(ctx, x, y, k) { drawBundle(ctx, x, y, k, 5); }
+
+  function floor(ctx, px, py, w, h, fill, line) {
+    ctx.fillStyle = fill; rrect(ctx, px + 2, py + 2, w - 4, h - 4, 7); ctx.fill();
+    ctx.strokeStyle = line; ctx.lineWidth = 2; ctx.stroke();
   }
 
   function drawMachine(ctx, b, isl, t) {
     const def = D.BUILD[b.type], px = b.x * T, py = b.y * T, w = def.w * T, h = def.h * T;
     const cx = px + w / 2, cy = py + h / 2;
-    ctx.fillStyle = 'rgba(0,0,0,0.25)'; rrect(ctx, px + 5, py + 6, w - 6, h - 6, 6); ctx.fill();
+    const busy = isl ? t * 8 + (b.id || 0) : 0;
+    if (def.w > 1) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; rrect(ctx, px + 5, py + 6, w - 6, h - 6, 6); ctx.fill(); }
 
     if (b.type === 'extractor') {
-      ctx.fillStyle = '#545454'; rrect(ctx, px + 2, py + 2, w - 4, h - 4, 7); ctx.fill();
-      ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 2; ctx.stroke();
       const tot = isl ? resUnder(isl, b) : {};
       const main = Object.keys(tot).sort((a, c) => tot[c] - tot[a])[0];
-      ctx.strokeStyle = main ? D.RES[main].c : '#777'; ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.arc(cx, cy, 30, 0, TAU); ctx.stroke();
-      ctx.save(); ctx.translate(cx, cy);
       const working = isl && !b.empty && !(b.out && b.out.length);
-      ctx.rotate(working ? t * 4 : b.id || 0);
-      ctx.fillStyle = '#8c8c8c'; ctx.beginPath(); ctx.arc(0, 0, 20, 0, TAU); ctx.fill();
-      ctx.strokeStyle = '#d0d0d0'; ctx.lineWidth = 4;
-      for (let k = 0; k < 3; k++) {
-        const a = (k / 3) * TAU;
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * 18, Math.sin(a) * 18); ctx.stroke();
+      const sw = working ? busy : 0;
+      if (main === 'madera') {
+        // Campamento de leñadores: troncos apilados y tocones.
+        floor(ctx, px, py, w, h, '#6f9445', '#3f5a26');
+        ctx.fillStyle = '#2e6b2a'; ctx.beginPath(); ctx.arc(px + 22, py + 22, 14, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#3f8a36'; ctx.beginPath(); ctx.arc(px + 18, py + 18, 7, 0, TAU); ctx.fill();
+        for (let i = 0; i < 3; i++) {
+          ctx.fillStyle = '#7a5230'; rrect(ctx, cx - 6, cy + 4 + i * 7, 34, 6, 3); ctx.fill();
+          ctx.fillStyle = '#c9a26b'; ctx.beginPath(); ctx.arc(cx - 6, cy + 7 + i * 7, 3, 0, TAU); ctx.fill();
+        }
+        ctx.fillStyle = '#8a6440'; ctx.beginPath(); ctx.arc(px + w - 20, py + 20, 6, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#c9a26b'; ctx.beginPath(); ctx.arc(px + w - 20, py + 20, 3.5, 0, TAU); ctx.fill();
+        drawWorker(ctx, px + 40, py + 24, Math.PI, '#7b3f2a', sw, 'hacha');
+        drawWorker(ctx, px + 22, py + h - 22, -Math.PI / 2, '#3d5a80', sw + 1.5, 'hacha');
+      } else {
+        // Boca de mina en la roca, con vigas y una vagoneta.
+        floor(ctx, px, py, w, h, '#8a7a62', '#4e4232');
+        ctx.fillStyle = '#6d6458'; ctx.beginPath(); ctx.ellipse(cx, cy - 10, 36, 24, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#5c544a'; ctx.beginPath(); ctx.ellipse(cx - 12, cy - 18, 14, 9, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#1b1410';
+        ctx.beginPath(); ctx.moveTo(cx - 11, cy + 2); ctx.lineTo(cx - 11, cy - 8); ctx.arc(cx, cy - 8, 11, Math.PI, 0); ctx.lineTo(cx + 11, cy + 2); ctx.fill();
+        ctx.fillStyle = '#7a5230';
+        ctx.fillRect(cx - 15, cy - 20, 4, 23); ctx.fillRect(cx + 11, cy - 20, 4, 23); ctx.fillRect(cx - 16, cy - 22, 32, 4);
+        ctx.strokeStyle = '#4a3a2a'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(cx - 4, cy + 2); ctx.lineTo(cx - 4, py + h - 6); ctx.moveTo(cx + 4, cy + 2); ctx.lineTo(cx + 4, py + h - 6); ctx.stroke();
+        ctx.fillStyle = '#5a4632'; rrect(ctx, cx - 7, cy + 14, 14, 11, 2); ctx.fill();
+        ctx.fillStyle = main ? D.RES[main].c : '#999';
+        ctx.beginPath(); ctx.arc(cx - 3, cy + 16, 3, 0, TAU); ctx.arc(cx + 3, cy + 17, 3, 0, TAU); ctx.fill();
+        drawWorker(ctx, px + 20, py + h - 22, -Math.PI / 2, '#7b3f2a', sw, 'pico');
+        drawWorker(ctx, px + w - 20, py + h - 24, -Math.PI / 2 - 0.4, '#556b2f', sw + 2, 'pico');
       }
-      ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(0, 0, 5, 0, TAU); ctx.fill();
-      ctx.restore();
       if (b.empty) {
         ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 5;
         ctx.beginPath(); ctx.moveTo(px + 20, py + 20); ctx.lineTo(px + w - 20, py + h - 20);
         ctx.moveTo(px + w - 20, py + 20); ctx.lineTo(px + 20, py + h - 20); ctx.stroke();
       }
     } else if (b.type === 'fundicion') {
-      ctx.fillStyle = '#8e3b2e'; rrect(ctx, px + 2, py + 2, w - 4, h - 4, 7); ctx.fill();
-      ctx.strokeStyle = '#4a1d16'; ctx.lineWidth = 2; ctx.stroke();
+      floor(ctx, px, py, w, h, '#8e3b2e', '#4a1d16');
       ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1;
-      for (let r = 1; r < 6; r++) {
-        ctx.beginPath(); ctx.moveTo(px + 4, py + r * 16); ctx.lineTo(px + w - 4, py + r * 16); ctx.stroke();
-      }
+      for (let r = 1; r < 6; r++) { ctx.beginPath(); ctx.moveTo(px + 4, py + r * 16); ctx.lineTo(px + w - 4, py + r * 16); ctx.stroke(); }
       const glow = b.on ? 0.6 + Math.sin(t * 12) * 0.2 : 0.1;
       ctx.fillStyle = '#2a1410'; rrect(ctx, cx - 18, cy - 12, 36, 26, 10); ctx.fill();
       ctx.fillStyle = `rgba(255,${120 + Math.floor(glow * 80)},30,${glow})`; rrect(ctx, cx - 14, cy - 8, 28, 18, 8); ctx.fill();
@@ -469,20 +661,19 @@
           ctx.beginPath(); ctx.arc(px + w - 18 + ph * 8, py + 18 - ph * 30, 5 + ph * 7, 0, TAU); ctx.fill();
         }
       }
+      drawWorker(ctx, cx, py + h - 16, -Math.PI / 2, '#5a3a1e', b.on ? busy * 0.6 : 0, 'pico');
     } else if (b.type === 'aserradero') {
-      ctx.fillStyle = '#9a6a3a'; rrect(ctx, px + 2, py + 2, w - 4, h - 4, 7); ctx.fill();
-      ctx.strokeStyle = '#4e3115'; ctx.lineWidth = 2; ctx.stroke();
+      floor(ctx, px, py, w, h, '#9a6a3a', '#4e3115');
       ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1;
       for (let i = 1; i < 6; i++) { ctx.beginPath(); ctx.moveTo(px + i * 16, py + 4); ctx.lineTo(px + i * 16, py + h - 4); ctx.stroke(); }
-      ctx.save(); ctx.translate(cx, cy); ctx.rotate(b.on ? t * 10 : 0);
+      ctx.save(); ctx.translate(cx, cy - 6); ctx.rotate(b.on ? t * 10 : 0);
       ctx.fillStyle = '#c8ccd0'; ctx.beginPath();
-      for (let k = 0; k < 16; k++) {
-        const a = (k / 16) * TAU, r = k % 2 ? 22 : 17;
-        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-      }
+      for (let k = 0; k < 16; k++) { const a = (k / 16) * TAU, r = k % 2 ? 20 : 15; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
       ctx.closePath(); ctx.fill();
       ctx.fillStyle = '#555'; ctx.beginPath(); ctx.arc(0, 0, 5, 0, TAU); ctx.fill();
       ctx.restore();
+      drawWorker(ctx, px + 22, py + h - 18, -Math.PI / 2, '#3d5a80', b.on ? busy : 0, 'martillo');
+      drawWorker(ctx, px + w - 22, py + h - 18, -Math.PI / 2, '#7b3f2a', b.on ? busy + 2 : 0, 'martillo');
     } else if (b.type === 'almacen') {
       ctx.fillStyle = '#a5713e'; rrect(ctx, px + 2, py + 2, w - 4, h - 4, 4); ctx.fill();
       ctx.strokeStyle = '#5e3b1c'; ctx.lineWidth = 3; ctx.stroke();
@@ -493,8 +684,68 @@
         ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(px + 6, py + h - 10, w - 12, 5);
         ctx.fillStyle = f > 0.9 ? '#e74c3c' : '#58d26b'; ctx.fillRect(px + 6, py + h - 10, (w - 12) * Math.min(1, f), 5);
       }
+    } else if (b.type === 'herreria') {
+      // Piso de piedra, fragua encendida, yunque y el herrero con su martillo.
+      floor(ctx, px, py, w, h, '#7d7268', '#3f3a35');
+      ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 1;
+      for (let i = 1; i < 3; i++) { ctx.strokeRect(px + i * 32 - 32 + 4, py + 4, 32, h - 8); }
+      const glow = b.on ? 0.65 + Math.sin(t * 10) * 0.2 : 0.15;
+      ctx.fillStyle = '#3a3330'; ctx.beginPath(); ctx.arc(px + w - 22, py + 22, 14, 0, TAU); ctx.fill();
+      ctx.fillStyle = `rgba(255,140,40,${glow})`; ctx.beginPath(); ctx.arc(px + w - 22, py + 22, 8, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#2b2b2b'; rrect(ctx, cx - 14, cy + 2, 28, 10, 3); ctx.fill();
+      ctx.fillStyle = '#444'; ctx.fillRect(cx - 5, cy + 12, 10, 8);
+      drawWorker(ctx, cx, cy - 12, Math.PI / 2, '#5a3a1e', b.on ? busy * 1.3 : 0, 'martillo');
+      ctx.fillStyle = '#4a4f55';
+      for (let i = 0; i < Math.min(4, (b.out || []).length); i++) { ctx.beginPath(); ctx.arc(px + 14 + i * 7, py + h - 14, 3, 0, TAU); ctx.fill(); }
+    } else if (b.type === 'taller') {
+      // Tablones, mesa de trabajo, barriles y dos artesanos.
+      floor(ctx, px, py, w, h, '#b08a5a', '#5e3b1c');
+      ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1;
+      for (let i = 1; i < 8; i++) { ctx.beginPath(); ctx.moveTo(px + 4, py + i * 12); ctx.lineTo(px + w - 4, py + i * 12); ctx.stroke(); }
+      ctx.fillStyle = '#6b4423'; rrect(ctx, cx - 22, cy - 8, 44, 16, 3); ctx.fill();
+      const r = b.recipe && D.RECIPES.taller[b.recipe];
+      if (r) { drawBundle(ctx, cx - 10, cy, Object.keys(r.in)[0], 3.5); drawBundle(ctx, cx + 10, cy, r.out, 3.5); }
+      for (const [bx, by] of [[px + 14, py + 14], [px + 26, py + 12]]) {
+        ctx.fillStyle = '#7a5230'; ctx.beginPath(); ctx.arc(bx, by, 6, 0, TAU); ctx.fill();
+        ctx.strokeStyle = '#3b2410'; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+      drawWorker(ctx, cx - 12, cy + 18, -Math.PI / 2, '#7b3f2a', b.on ? busy : 0, 'martillo');
+      drawWorker(ctx, cx + 12, cy - 18, Math.PI / 2, '#556b2f', b.on ? busy + 2 : 0, 'martillo');
+    } else if (b.type === 'muelle') {
+      // Tablas sobre pilotes y cajones apilados esperando el barco.
+      ctx.fillStyle = '#9a6b3d'; ctx.fillRect(px + 1, py + 1, w - 2, h - 2);
+      ctx.strokeStyle = 'rgba(40,25,10,0.45)'; ctx.lineWidth = 1.5;
+      for (let i = 1; i < 8; i++) { ctx.beginPath(); ctx.moveTo(px + i * 8, py + 1); ctx.lineTo(px + i * 8, py + h - 1); ctx.stroke(); }
+      ctx.fillStyle = '#4a3020';
+      for (const [ox, oy] of [[5, 5], [w - 5, 5], [5, h - 5], [w - 5, h - 5]]) { ctx.beginPath(); ctx.arc(px + ox, py + oy, 4, 0, TAU); ctx.fill(); }
+      const keys = b.store ? Object.keys(b.store).sort((a, c) => b.store[c] - b.store[a]).slice(0, 4) : [];
+      keys.forEach((k, i) => drawBundle(ctx, px + 20 + (i % 2) * 24, py + 20 + Math.floor(i / 2) * 24, k, 7));
+      ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 14px Georgia'; ctx.textAlign = 'center';
+      if (!keys.length) ctx.fillText('⚓', cx, cy + 5);
+    } else if (b.type === 'clasificador') {
+      // Capataz con su cartel: lo elegido sigue derecho, lo demás a los costados.
+      drawBelt(ctx, b);
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(b.dir * Math.PI / 2);
+      ctx.fillStyle = 'rgba(200,200,200,0.85)';
+      for (const sy of [-1, 1]) { ctx.beginPath(); ctx.moveTo(-2, sy * 15); ctx.lineTo(3, sy * 10); ctx.lineTo(-7, sy * 10); ctx.fill(); }
+      ctx.restore();
+      drawPerson(ctx, cx - 3, cy, b.dir * Math.PI / 2, '#8e1b1b', 0, '#1a1a1a');
+      ctx.fillStyle = '#6d4c2a'; ctx.fillRect(px + T - 9, py + 3, 2, 10);
+      ctx.fillStyle = b.filter ? D.RES[b.filter].c : '#f4ecd8'; ctx.strokeStyle = '#3b2410'; ctx.lineWidth = 1;
+      ctx.fillRect(px + T - 13, py + 2, 10, 7); ctx.strokeRect(px + T - 13, py + 2, 10, 7);
+      if (b.hold) drawBundle(ctx, cx + 6, cy + 6, b.hold, 3.5);
+    } else if (b.type === 'insertador') {
+      // Estibador: camina de atrás hacia adelante llevando una cosa por vez.
+      ctx.fillStyle = '#a07a4a'; ctx.fillRect(px + 1, py + 1, T - 2, T - 2);
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(px + 1, cy); ctx.lineTo(px + T - 1, cy); ctx.stroke();
+      const [dx, dy] = DIRS[b.dir], f = b.hand ? (b.prog || 0) - 0.5 : -0.3;
+      const x = cx + dx * f * T * 0.6, y = cy + dy * f * T * 0.6;
+      drawPerson(ctx, x, y, b.dir * Math.PI / 2, '#2f4f6f', b.hand ? t * 9 : 0, '#7a1f1f');
+      if (b.hand) drawBundle(ctx, x, y, b.hand, 4);
+      if (b.filter) { ctx.fillStyle = D.RES[b.filter].c; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.arc(px + 6, py + 6, 3.5, 0, TAU); ctx.fill(); ctx.stroke(); }
     }
-    if (b.type !== 'almacen') drawArrow(ctx, b);
+    if (b.type !== 'almacen' && b.type !== 'muelle') drawArrow(ctx, b);
   }
 
   function drawTiles(ctx, isl, x0, y0, x1, y1, t) {
@@ -552,9 +803,8 @@
     ctx.translate(4, 4);
     const b = { type, x: 0, y: 0, dir: 0, id: 0.6, items: [] };
     if (type === 'cinta') {
-      drawBelt(ctx, b, 0.3);
-      drawArrow(ctx, b);
-      drawItem(ctx, T * 0.5, T * 0.5, 'cobre');
+      drawBelt(ctx, b);
+      drawPorter(ctx, T * 0.5, T * 0.5, 0, 'cobre', 0.3);
     } else drawMachine(ctx, b, null, 0);
     return cv.toDataURL();
   };
@@ -578,11 +828,11 @@
       ctx.stroke();
     }
 
-    for (const b of isl.buildings) if (b.type === 'cinta') drawBelt(ctx, b, t);
+    for (const b of isl.buildings) if (b.type === 'cinta') drawBelt(ctx, b);
     for (const b of isl.buildings) {
       if (b.type !== 'cinta') continue;
       const [dx, dy] = DIRS[b.dir];
-      for (const it of b.items) drawItem(ctx, b.x * T + T / 2 + dx * (it.p - 0.5) * T, b.y * T + T / 2 + dy * (it.p - 0.5) * T, it.t);
+      for (const it of b.items) drawPorter(ctx, b.x * T + T / 2 + dx * (it.p - 0.5) * T, b.y * T + T / 2 + dy * (it.p - 0.5) * T, b.dir, it.t, t);
     }
     for (const b of isl.buildings) if (b.type !== 'cinta') drawMachine(ctx, b, isl, t);
 
@@ -593,7 +843,7 @@
       const ok = Isl.canPlace(isl, Isl.sel, x, y) && PV.Inv.canPay(def.cost, isl);
       const ghost = { type: Isl.sel, x, y, dir: Isl.dir, id: 0, items: [] };
       ctx.globalAlpha = 0.6;
-      if (Isl.sel === 'cinta') drawBelt(ctx, ghost, t); else drawMachine(ctx, ghost, null, t);
+      if (Isl.sel === 'cinta') drawBelt(ctx, ghost); else drawMachine(ctx, ghost, null, t);
       if (Isl.sel === 'cinta') drawArrow(ctx, ghost);
       ctx.globalAlpha = 1;
       ctx.strokeStyle = ok ? '#58d26b' : '#e74c3c'; ctx.lineWidth = 2;

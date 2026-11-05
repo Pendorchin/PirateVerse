@@ -6,7 +6,7 @@ Juego de piratas estilo Factorio: navegá un archipiélago, conquistá islas, au
 Abrí `index.html` en el navegador (doble clic). No hace falta instalar nada.
 
 **En el mar:** W/S velas · A/D timón · Q babor · E estribor (cañones) · F interactuar · rueda zoom
-**En la isla:** 1-5 elegir edificio · R rotar · clic construir (arrastrá para cintas) · clic derecho quitar · WASD cámara · Esc zarpar
+**En la isla:** 1-0 elegir edificio · R rotar · clic construir (arrastrá para senderos) · clic en capataz, estibador, taller, herrería o muelle para elegir receta/filtro · clic derecho quitar · WASD cámara · Esc zarpar
 
 La partida se guarda sola en el navegador.
 
@@ -15,5 +15,7 @@ La partida se guarda sola en el navegador.
 - `js/world.js` — generación procedural del mapa y de las islas
 - `js/sea.js` — navegación, combate y conquista
 - `js/island.js` — construcción y simulación de fábricas
-- `js/port.js` — mercado, astillero y reparación
+- `js/port.js` — mercado, astillero, flota y reparación
+- `js/fleet.js` — barcos mercantes que venden solos
+- `js/sprites.js` — sprites pixel art (SpriteCook)
 - `DISENO.md` — documento de diseño completo

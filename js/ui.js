@@ -10,9 +10,10 @@
   const HELP = {
     sea: [[['W', 'S'], 'velas'], [['A', 'D'], 'timón'], [['Q'], 'cañones babor'], [['E'], 'cañones estribor'], [['F'], 'interactuar'], [['Rueda'], 'zoom']],
     port: [[['Esc'], 'zarpar']],
-    island: [[['1', '5'], 'elegir edificio'], [['R'], 'rotar'], [['Clic'], 'construir (arrastrá cintas)'], [['Clic der.'], 'quitar'],
+    island: [[['1', '0'], 'elegir edificio'], [['R'], 'rotar'], [['Clic'], 'construir · elegir receta'], [['Clic der.'], 'quitar'],
       [['W', 'A', 'S', 'D'], 'cámara'], [['Rueda'], 'zoom'], [['Esc'], 'zarpar']],
   };
+  const resName = k => D.RES[k].n;
   const helpHtml = list => list.map(([keys, label]) => `<span>${keys.map(k => `<kbd>${k}</kbd>`).join(keys.length === 2 && keys[0] === '1' ? '–' : '')} ${label}</span>`).join('');
 
   UI.init = function () {
@@ -36,6 +37,11 @@
       if (b && !b.disabled) PV.Port.action(b);
     });
 
+    $('chooser').addEventListener('click', e => {
+      const el = e.target.closest('button');
+      if (el) pick(el.dataset.v);
+    });
+
     const bar = $('buildbar');
     bar.innerHTML = Object.keys(D.BUILD).map(k => {
       const d = D.BUILD[k];
@@ -57,11 +63,74 @@
     show('buildbar', s === 'island');
     show('portPanel', s === 'port');
     show('tooltip', false);
+    UI.closeChooser();
     $('help').innerHTML = helpHtml(HELP[s] || []);
     $('quest').classList.toggle('island', s === 'island');
     if (s === 'menu') show('quest', false);
     if (s === 'menu') $('btnContinue').disabled = !PV.Save.has();
     tick = 1;
+  };
+
+  // ---------- Panel para elegir receta / filtro / descarga ----------
+
+  let chooseB = null;
+  const RES_KEYS = () => Object.keys(D.RES);
+  const opt = (v, label, on, color) =>
+    `<button data-v="${v}" class="${on ? 'on' : ''}">${color ? `<i class="dot" style="background:${color}"></i>` : ''}${label}</button>`;
+  const resOpts = (isOn) => RES_KEYS().map(k => opt(k, resName(k), isOn(k), D.RES[k].c)).join('');
+
+  UI.CHOOSE = {
+    clasificador: b => ({ title: '🧭 Capataz: ¿qué sigue derecho?', sub: 'Lo demás sale por los costados.',
+      html: opt('', 'Todo', !b.filter) + resOpts(k => b.filter === k) }),
+    insertador: b => ({ title: '💪 Estibador: ¿qué agarra?', sub: 'Solo lleva lo que el de adelante acepta.',
+      html: opt('', 'Cualquier cosa', !b.filter) + resOpts(k => b.filter === k) }),
+    herreria: b => ({ title: '⚒️ Herrería: receta', sub: '',
+      html: Object.keys(D.RECIPES.herreria).map(k => opt(k, PV.Island.recipeTxt(D.RECIPES.herreria[k]), b.recipe === k)).join('') }),
+    taller: b => ({ title: '🧵 Taller: receta', sub: '',
+      html: Object.keys(D.RECIPES.taller).map(k => opt(k, PV.Island.recipeTxt(D.RECIPES.taller[k]), b.recipe === k)).join('') }),
+    muelle: b => ({ title: '⚓ Muelle: descargar del barco', sub: 'Lo marcado se baja solo al almacén de la isla cuando llegás. Lo que trae el sendero se carga solo.',
+      html: resOpts(k => b.unload.includes(k)), multi: true }),
+  };
+
+  function pick(v) {
+    const b = chooseB;
+    if (!b) return;
+    if (v === '__close') return UI.closeChooser();
+    if (b.type === 'muelle') {
+      const i = b.unload.indexOf(v);
+      if (i >= 0) b.unload.splice(i, 1); else b.unload.push(v);
+      renderChooser();
+      return;
+    }
+    if (b.recipe !== undefined) {
+      if (b.recipe !== v) {
+        // Lo que tenía para la receta vieja vuelve al almacén.
+        const isl = PV.Island.cur;
+        for (const k in b.inv) PV.Inv.add(isl.storage, k, b.inv[k]);
+        b.inv = {}; b.prog = 0; b.recipe = v;
+      }
+    } else b.filter = v || null;
+    UI.closeChooser();
+  }
+
+  function renderChooser() {
+    const c = UI.CHOOSE[chooseB.type](chooseB);
+    $('chooser').innerHTML = `<h4>${c.title}</h4>${c.sub ? `<div class="sub">${c.sub}</div>` : ''}<div class="opts ${c.multi || chooseB.recipe === undefined ? 'grid' : ''}">${c.html}</div>
+      <button data-v="__close" class="close">Listo</button>`;
+  }
+
+  UI.chooser = function (b, mx, my) {
+    chooseB = b;
+    renderChooser();
+    const el = $('chooser');
+    el.classList.remove('hidden');
+    el.style.left = Math.max(8, Math.min(mx + 12, PV.W - el.offsetWidth - 8)) + 'px';
+    el.style.top = Math.max(8, Math.min(my - 20, PV.H - el.offsetHeight - 60)) + 'px';
+  };
+
+  UI.closeChooser = function () {
+    chooseB = null;
+    $('chooser').classList.add('hidden');
   };
 
   UI.toast = function (msg, kind) {
@@ -91,6 +160,11 @@
     return `<b>${isl.name}</b> · ${'★'.repeat(isl.tier)} ${D.TIERS[isl.tier].n}<br>Recursos: ${res}<br>${line}`;
   }
 
+  function ammoTxt(cargo) {
+    const have = D.AMMO.filter(a => cargo[a.k]).map(a => `${cargo[a.k]} ${resName(a.k).toLowerCase()}`);
+    return have.length ? have.join(', ') : '<span class="muted">metralla común</span>';
+  }
+
   function stats() {
     const S = PV.state, sh = S.ship, st = PV.Sea.stats();
     const hp = Math.max(0, sh.hp) / st.maxHp;
@@ -101,6 +175,7 @@
         <div class="bar reload"><div style="width:${rl * 100}%"></div><span>${rl >= 1 ? '● ' : ''}Q Babor</span></div>
         <div class="bar reload"><div style="width:${rr * 100}%"></div><span>${rr >= 1 ? '● ' : ''}E Estribor</span></div>
       </div>
+      <div class="lbl">💣 Munición: ${ammoTxt(sh.cargo)}</div>
       <div class="lbl"><i class="crate"></i> Bodega ${PV.Inv.cargoTotal()} / ${st.cap}</div>
       <div class="chips">${PV.Inv.chips(sh.cargo)}</div>`;
   }

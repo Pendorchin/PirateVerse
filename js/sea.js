@@ -47,6 +47,8 @@
 
   // ---------- Física ----------
 
+  Sea.collide = (o, pad) => collide(o, pad);
+
   function collide(o, pad) {
     for (const isl of PV.state.islands) {
       const dx = o.x - isl.x, dy = o.y - isl.y;
@@ -128,7 +130,15 @@
     if (sh[key] > 0) return;
     const st = Sea.stats();
     sh[key] = st.reload;
-    fire(sh, side, st.guns, st.dmg, 'p');
+    // Usa la mejor munición que haya en la bodega; sin munición tira metralla común.
+    const am = D.AMMO.find(a => sh.cargo[a.k] > 0);
+    let dmg = st.dmg;
+    if (am) {
+      const used = Math.min(st.guns, sh.cargo[am.k]);
+      PV.Inv.add(sh.cargo, am.k, -used);
+      dmg = Math.round(st.dmg * (1 + (am.mult - 1) * used / st.guns));
+    }
+    fire(sh, side, st.guns, dmg, 'p');
     Sea.shake = Math.max(Sea.shake, 4);
   };
 
@@ -244,6 +254,21 @@
       for (const isl of S.islands) {
         const d = U.dist(sh.x, sh.y, isl.x, isl.y) - Wd.radius(isl, Math.atan2(sh.y - isl.y, sh.x - isl.x));
         if (d < 90 && d < best) { best = d; Sea.near = isl; }
+      }
+    }
+
+    Sea._dockT = (Sea._dockT || 0) - dt;
+    if (Sea._dockT <= 0 && !(sh.sunk > 0)) {
+      Sea._dockT = 1;
+      for (const isl of S.islands) {
+        if (!isl.owned || !isl.grid) continue;
+        if (U.dist(sh.x, sh.y, isl.x, isl.y) > isl.R + 220) { isl._docked = false; continue; }
+        const r = PV.Island.dockSync(isl);
+        if (r.loaded || r.unloaded) {
+          if (!isl._docked) PV.UI.toast(`Muelle de ${isl.name}: ${r.loaded} cargados, ${r.unloaded} descargados.`, 'good');
+          else floatText(sh.x, sh.y - 30, `+${r.loaded} ⚓`, '#fff');
+        }
+        isl._docked = true;
       }
     }
 
@@ -644,6 +669,8 @@
       ctx.beginPath(); ctx.arc(x0 + isl.x * k, y0 + isl.y * k, Math.max(2.5, isl.R * k), 0, TAU); ctx.fill();
       if (isl.owned) { ctx.strokeStyle = '#7cfc00'; ctx.lineWidth = 1.5; ctx.stroke(); }
     }
+    ctx.fillStyle = '#85c1e9';
+    for (const m of PV.Fleet.list()) ctx.fillRect(x0 + m.x * k - 1.5, y0 + m.y * k - 1.5, 3, 3);
     const sh = S.ship;
     ctx.save(); ctx.translate(x0 + sh.x * k, y0 + sh.y * k); ctx.rotate(sh.a);
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -4); ctx.lineTo(-4, 4); ctx.fill();
@@ -688,6 +715,13 @@
       if (e.x < x0 || e.x > x1 || e.y < y0 || e.y > y1) continue;
       drawShip(ctx, e, '#2b2b2b', '#4a3020', e.guns, '#f5f5f5');
       if (e.hp < e.max) hpBar(ctx, e.x, e.y - 34, e.hp / e.max);
+    }
+    ctx.textAlign = 'center'; ctx.font = '12px Georgia';
+    for (const m of PV.Fleet.list()) {
+      if (m.x < x0 || m.x > x1 || m.y < y0 || m.y > y1) continue;
+      drawShip(ctx, m, '#f3e2b8', '#6e4a26', 1, '#2471a3');
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.strokeText(m.name, m.x, m.y - 30);
+      ctx.fillStyle = '#d6eaf8'; ctx.fillText(m.name, m.x, m.y - 30);
     }
     if (!(sh.sunk > 0)) drawShip(ctx, sh, '#fbf6e9', '#8a5a2b', Sea.stats().guns, '#c0392b');
 

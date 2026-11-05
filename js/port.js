@@ -46,6 +46,17 @@
     if (sold) PV.UI.toast(`Vendiste ${sold} ${D.RES[k].n} por ${got} doblones`, 'good');
   }
 
+  // Venta automática de una bodega entera (la usan los mercantes).
+  Port.sellAll = function (isl, cargo) {
+    let got = 0;
+    for (const k of Object.keys(cargo)) {
+      const m = isl.market[k];
+      for (let i = cargo[k]; i > 0; i--) { got += Port.sellPrice(isl, k); m.f = Math.max(0.3, m.f * 0.985); }
+      delete cargo[k];
+    }
+    return got;
+  };
+
   function buy(k, n) {
     const S = PV.state, isl = Port.isl, m = isl.market[k];
     let spent = 0, bought = 0;
@@ -86,6 +97,8 @@
     else if (a === 'sell') sell(el.dataset.k, +el.dataset.n);
     else if (a === 'buy') buy(el.dataset.k, +el.dataset.n);
     else if (a === 'up') upgrade(el.dataset.k);
+    else if (a === 'buyship') PV.Fleet.buy(Port.isl);
+    else if (a === 'fhome' || a === 'fport') PV.Fleet.cycle(+el.dataset.i, a === 'fhome' ? 'home' : 'port');
     else if (a === 'repair') repair();
     Port.render();
   };
@@ -130,6 +143,21 @@
       }).join('');
   }
 
+  function fleetHtml() {
+    const L = PV.Fleet.list(), M = D.MERCHANT, isl = id => PV.state.islands[id];
+    const rows = L.map((m, i) => `<div class="fleet"><img src="${PV.Spr.src('barco_mercante')}" alt="">
+      <div><h4 style="margin:0">${m.name}</h4><div class="sub">${isl(m.home).name} → ${isl(m.port).name}</div>
+        <div class="sub">${PV.Fleet.status(m)} · ganó ${U.fmt(m.earned)} <i class="coin"></i></div></div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <button data-act="fhome" data-i="${i}">Cambiar isla</button><button data-act="fport" data-i="${i}">Cambiar puerto</button></div></div>`).join('');
+    const can = L.length < M.max && PV.Inv.canPay(M.cost, null);
+    return `<p class="muted">Los mercantes cargan solos en el <b>muelle</b> de tu isla, navegan al puerto, venden todo y vuelven. Llevan ${M.cap} de carga.</p>
+      ${rows || '<p class="muted">Todavía no tenés mercantes.</p>'}
+      <div class="fleet"><img src="${PV.Spr.src('barco_mercante')}" alt="" style="filter:grayscale(.6)">
+        <div><h4 style="margin:0">Comprar mercante</h4><div class="sub">${PV.Inv.costHtml(M.cost, null)} · ${L.length}/${M.max}</div></div>
+        <button class="primary" data-act="buyship" ${can ? '' : 'disabled'}>Comprar</button></div>`;
+  }
+
   function repairHtml() {
     const S = PV.state, st = PV.Sea.stats();
     const missing = Math.ceil(st.maxHp - S.ship.hp), cost = Math.ceil(missing * 0.8);
@@ -144,12 +172,12 @@
     const prev = el.querySelector('.pbody');
     const scroll = prev ? prev.scrollTop : 0;
     const tab = (id, label) => `<button data-act="tab" data-tab="${id}" class="${Port.tab === id ? 'on' : ''}">${label}</button>`;
-    const body = Port.tab === 'mercado' ? marketHtml() : Port.tab === 'astillero' ? shipyardHtml() : repairHtml();
+    const body = Port.tab === 'mercado' ? marketHtml() : Port.tab === 'astillero' ? shipyardHtml() : Port.tab === 'flota' ? fleetHtml() : repairHtml();
     el.innerHTML = `
       <div class="ph"><h2>⚓ ${isl.name}</h2>
         <div><i class="coin"></i> <b>${U.fmt(S.doblones)}</b> · <i class="crate"></i> ${PV.Inv.cargoTotal()}/${PV.Inv.cargoCap()}</div>
         <button class="primary" data-act="close">⛵ Zarpar (Esc)</button></div>
-      <div class="tabs">${tab('mercado', '🪙 Mercado')}${tab('astillero', '🔨 Astillero')}${tab('reparar', '🩹 Reparar')}</div>
+      <div class="tabs">${tab('mercado', '🪙 Mercado')}${tab('astillero', '🔨 Astillero')}${tab('flota', '⛵ Flota')}${tab('reparar', '🩹 Reparar')}</div>
       <div class="pbody">${body}</div>`;
     el.querySelector('.pbody').scrollTop = scroll;
   };

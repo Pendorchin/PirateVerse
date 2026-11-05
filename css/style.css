@@ -107,6 +107,18 @@ kbd {
 #buildbar button .ic { width: 40px; height: 40px; image-rendering: auto; margin: 2px 0; }
 #buildbar button small { font-size: 11px; }
 
+#chooser { position: fixed; z-index: 30; width: 320px; padding: 10px 12px; max-height: 70vh; overflow: auto; }
+#chooser h4 { margin: 0 0 4px; font-family: 'Pirata One', Georgia, serif; font-size: 20px; font-weight: normal; }
+#chooser .sub { font-size: 12px; opacity: .75; margin-bottom: 6px; }
+#chooser .opts { display: flex; flex-direction: column; gap: 4px; }
+#chooser .opts.grid { display: grid; grid-template-columns: 1fr 1fr; }
+#chooser .opts button { text-align: left; font-size: 12px; padding: 4px 6px; display: flex; align-items: center; gap: 5px; }
+#chooser .opts button.on { background: var(--gold); box-shadow: 0 0 0 2px #fff inset; }
+#chooser .close { width: 100%; margin-top: 8px; }
+#buildbar button { min-width: 78px !important; }
+.fleet { padding: 10px; border-bottom: 1px solid rgba(90,58,30,.15); display: grid; grid-template-columns: 70px 1fr auto; gap: 10px; align-items: center; }
+.fleet img { width: 64px; image-rendering: pixelated; }
+.fleet .sub { font-size: 12px; opacity: .75; }
 #tooltip { position: fixed; pointer-events: none; background: rgba(20,12,5,.88); color: #f8e9c6; padding: 6px 10px; border-radius: 6px; font-size: 13px; max-width: 260px; border: 1px solid rgba(224,180,76,.6); }
 
 .cost { white-space: nowrap; }
