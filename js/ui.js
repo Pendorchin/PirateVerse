@@ -10,7 +10,7 @@
   const HELP = {
     sea: [[['I'], 'investigación'], [['W', 'S'], 'velas'], [['A', 'D'], 'timón'], [['Q'], 'cañones babor'], [['E'], 'cañones estribor'], [['F'], 'interactuar'], [['Rueda'], 'zoom']],
     port: [[['Esc'], 'zarpar']],
-    island: [[['1', '0'], 'edificios'], [['M'], 'muelle'], [['C'], 'cartógrafo'], [['I'], 'investigación'], [['R'], 'rotar'], [['Clic'], 'construir · elegir receta'], [['Clic der.'], 'quitar'],
+    island: [[['1', '0'], 'edificios'], [['M'], 'muelle'], [['C'], 'cartógrafo'], [['B'], 'banquero'], [['I'], 'investigación'], [['R'], 'rotar'], [['Clic'], 'construir · elegir receta'], [['Clic der.'], 'quitar'],
       [['W', 'A', 'S', 'D'], 'cámara'], [['Rueda'], 'zoom'], [['Esc'], 'zarpar']],
   };
   const resName = k => D.RES[k].n;
@@ -47,6 +47,17 @@
       if (b.dataset.t) { PV.Tech.start(b.dataset.t); UI.renderResearch(); }
     });
 
+    $('bank').addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b || b.disabled) return;
+      const isl = PV.Island.cur, a = b.dataset.act, n = b.dataset.n === 'all' ? Infinity : +b.dataset.n;
+      if (a === 'close') return UI.closeBank();
+      if (a === 'dep') PV.Bank.deposit(isl, n === Infinity ? PV.state.doblones : n);
+      else if (a === 'wd') PV.Bank.withdraw(isl, n === Infinity ? PV.Bank.of(isl).saved : n);
+      else if (a === 'inv') PV.Bank.invest(isl, b.dataset.k, n);
+      UI.renderBank();
+    });
+
     $('chooser').addEventListener('click', e => {
       const el = e.target.closest('button');
       if (el) pick(el.dataset.v);
@@ -75,6 +86,7 @@
     show('tooltip', false);
     UI.closeChooser();
     UI.closeResearch();
+    UI.closeBank();
     $('help').innerHTML = helpHtml(HELP[s] || []);
     $('quest').classList.toggle('island', s === 'island');
     if (s === 'menu') show('quest', false);
@@ -181,7 +193,8 @@
     const S = PV.state, sh = S.ship, st = PV.Sea.stats();
     const hp = Math.max(0, sh.hp) / st.maxHp;
     const rl = 1 - (sh.rl || 0) / st.reload, rr = 1 - (sh.rr || 0) / st.reload;
-    return `<div class="gold"><i class="coin"></i> ${U.fmt(S.doblones)} doblones</div>
+    const banked = PV.Bank.total();
+    return `<div class="gold"><i class="coin"></i> ${U.fmt(S.doblones)} doblones${banked >= 1 ? ` <span class="muted" style="font-size:12px">· 🏦 ${U.fmt(Math.floor(banked))}</span>` : ''}</div>
       <div class="bar"><div style="width:${hp * 100}%"></div><span><i class="heart"></i> Casco ${Math.ceil(Math.max(0, sh.hp))} / ${st.maxHp}</span></div>
       <div class="reloads">
         <div class="bar reload"><div style="width:${rl * 100}%"></div><span>${rl >= 1 ? '● ' : ''}Q Babor</span></div>
@@ -210,6 +223,37 @@
     const r = PV.Tech.st(), cur = r && r.cur;
     return `<div class="lbl research-line">🗺️ ${cur ? `Investigando: <b>${D.TECH[cur].n}</b> ${Math.round(PV.Tech.progress(cur) * 100)}%` : '<span class="muted">Sin investigación</span>'} <kbd>I</kbd></div>`;
   }
+
+  // ---------- Banco ----------
+
+  UI.bankOpen = () => !$('bank').classList.contains('hidden');
+  UI.openBank = function () { UI.closeChooser(); UI.closeResearch(); $('bank').classList.remove('hidden'); UI.renderBank(); };
+  UI.closeBank = function () { $('bank').classList.add('hidden'); };
+
+  UI.renderBank = function () {
+    const isl = PV.Island.cur;
+    if (!isl) return UI.closeBank();
+    const S = PV.state, bk = PV.Bank.of(isl), saved = Math.floor(bk.saved), dob = S.doblones;
+    const btn = (act, n, label, ok) => `<button data-act="${act}" data-n="${n}" ${ok ? '' : 'disabled'}>${label}</button>`;
+    const lockInv = PV.Tech.lockOf('feature', 'inversiones');
+    const inv = lockInv
+      ? `<p class="muted">🔒 Investigá «${D.TECH[lockInv].n}» para invertir con riesgo.</p>`
+      : Object.keys(D.BANK.INVEST).map(k => {
+          const o = D.BANK.INVEST[k];
+          return `<div class="binv"><div><b>${o.icon} ${o.n}</b><div class="sub">${o.desc}<br>${Math.round(o.p * 100)}% de salir bien: +${Math.round(o.win * 100)}% · si sale mal: −${Math.round(o.lose * 100)}% · ${Math.round(o.t / 60)} min</div></div>
+            <div>${[100, 500, 2000].map(n => `<button data-act="inv" data-k="${k}" data-n="${n}" ${dob >= n ? '' : 'disabled'}>${U.fmt(n)}</button>`).join('')}</div></div>`;
+        }).join('');
+    const running = bk.inv.length ? '<div class="lbl">En curso</div>' + bk.inv.map(it => {
+      const o = D.BANK.INVEST[it.k];
+      return `<div class="binv run">${o.icon} ${o.n}: <b>${U.fmt(it.amt)}</b> <span class="muted">· vuelve en ${Math.floor(it.t / 60)}:${String(Math.floor(it.t % 60)).padStart(2, '0')}</span></div>`;
+    }).join('') : '';
+    $('bank').innerHTML = `<div class="rhead"><h2>🏦 Banquero de ${isl.name}</h2><button data-act="close">Cerrar (Esc)</button></div>
+      <p class="muted">Lo guardado acá no se pierde si te hunden y gana <b>${(PV.Bank.rate() * 100).toFixed(1).replace('.', ',')}% por minuto</b> (hasta ${U.fmt(PV.Bank.cap())} doblones). Ojo: los piratas a veces asaltan los bancos.</p>
+      <div class="bsum"><div><i class="coin"></i> Encima: <b>${U.fmt(dob)}</b></div><div>🏦 Guardado: <b>${U.fmt(saved)}</b></div></div>
+      <div class="brow"><span>Depositar</span>${btn('dep', 100, '100', dob >= 100)}${btn('dep', 1000, '1.000', dob >= 1000)}${btn('dep', 'all', 'Todo', dob > 0)}</div>
+      <div class="brow"><span>Retirar</span>${btn('wd', 100, '100', saved >= 100)}${btn('wd', 1000, '1.000', saved >= 1000)}${btn('wd', 'all', 'Todo', saved > 0)}</div>
+      <h4>Inversiones</h4>${inv}${running}`;
+  };
 
   // ---------- Panel de investigación ----------
 
@@ -253,7 +297,7 @@
     return '<div class="invrows">' + keys.map(k => `<div class="invrow"><i style="background:${D.RES[k].c}"></i><span>${resName(k)}</span><b>${bag[k]}</b>
       <button data-act="${act}" data-k="${k}" data-n="10">${arrow} 10</button><button data-act="${act}" data-k="${k}" data-n="all">${arrow} todo</button></div>`).join('') + '</div>';
   }
-  let lastInfo = '', researchT = 0;
+  let lastInfo = '', researchT = 0, bankT = 0;
 
   UI.update = function (dt) {
     const s = PV.scene;
@@ -279,6 +323,7 @@
       if (p) $('prompt').innerHTML = p;
     }
     if (s !== 'menu') PV.Tutorial.update();
+    if (UI.bankOpen()) { bankT -= 0.15; if (bankT <= 0) { bankT = 1; UI.renderBank(); } }
     if (UI.researchOpen()) { researchT -= 0.15; if (researchT <= 0) { researchT = 1; UI.renderResearch(); } }
     if (s === 'island') {
       // Solo se redibuja si cambió, para no perder clics en los botones.

@@ -99,6 +99,7 @@
     if (b.hand) for (let i = 0; i < (b.handN || 1); i++) back.push(b.hand);
     for (const k of back) PV.Inv.add(isl.storage, k, 1);
     for (const bag of [b.inv, b.store]) if (bag) for (const k in bag) PV.Inv.add(isl.storage, k, bag[k]);
+    if (b.type === 'banco') PV.Bank.onRemove(isl);
   }
 
   function removeAt(isl, x, y) {
@@ -544,6 +545,7 @@
       else if (e.button === 0 && !Isl.sel) {
         const b = occAt(isl, tx, ty);
         if (b && b.type === 'cartografo') PV.UI.openResearch();
+        else if (b && b.type === 'banco') PV.UI.openBank();
         else if (b && PV.UI.CHOOSE[b.type]) PV.UI.chooser(b, e.clientX, e.clientY);
       }
       else if (e.button === 0 && Isl.sel) {
@@ -629,6 +631,9 @@
         const r = D.RECIPES[b.type][b.recipe];
         s += `Receta: <b>${recipeTxt(r)}</b><br>Tiene: ${Object.keys(r.in).map(k => D.RES[k].n + ' ' + (b.inv[k] || 0) + '/' + r.in[k]).join(', ')}`;
         s += b.on ? '<br>🔨 Trabajando…' : '<br><i>Clic para cambiar la receta.</i>';
+      } else if (b.type === 'banco') {
+        const bk = PV.Bank.of(isl);
+        s += `Guardado: <b>${U.fmt(Math.floor(bk.saved))}</b> doblones<br>Interés: ${(PV.Bank.rate() * 100).toFixed(1).replace('.', ',')}% por minuto (hasta ${U.fmt(PV.Bank.cap())})` + (bk.inv.length ? `<br>Inversiones en curso: ${bk.inv.length}` : '') + '<br><i>Clic para abrir el banco.</i>';
       } else if (b.type === 'cartografo') {
         const cur = PV.Tech.st().cur, inv = Object.keys(b.inv).filter(k => b.inv[k] > 0);
         s += cur ? `Investigando: <b>${D.TECH[cur].n}</b> (${Math.round(PV.Tech.progress(cur) * 100)}%)` : 'Sin investigación elegida.';
@@ -749,6 +754,7 @@
     ctx.strokeStyle = line; ctx.lineWidth = 2; ctx.stroke();
   }
 
+  const NO_ARROW = ['almacen', 'muelle', 'cartografo', 'banco'];
   function drawMachine(ctx, b, isl, t) {
     const def = D.BUILD[b.type], px = b.x * T, py = b.y * T, w = def.w * T, h = def.h * T;
     const cx = px + w / 2, cy = py + h / 2;
@@ -871,6 +877,21 @@
       keys.forEach((k, i) => drawBundle(ctx, px + 20 + (i % 2) * 24, py + 20 + Math.floor(i / 2) * 24, k, 7));
       ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 14px Georgia'; ctx.textAlign = 'center';
       if (!keys.length) ctx.fillText('⚓', cx, cy + 5);
+    } else if (b.type === 'banco') {
+      // Casa del banquero: piso de piedra, mostrador, cofre con monedas y el banquero de galera.
+      floor(ctx, px, py, w, h, '#9a8f7e', '#4e463a');
+      ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 1;
+      for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(px + i * 16, py + 3); ctx.lineTo(px + i * 16, py + h - 3); ctx.moveTo(px + 3, py + i * 16); ctx.lineTo(px + w - 3, py + i * 16); ctx.stroke(); }
+      ctx.fillStyle = '#5e3b1c'; rrect(ctx, px + 6, py + 26, w - 12, 9, 2); ctx.fill();
+      ctx.fillStyle = '#6b4423'; rrect(ctx, px + 8, py + 6, 24, 16, 3); ctx.fill();
+      ctx.strokeStyle = '#d4a017'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = '#3b2410'; ctx.fillRect(px + 8, py + 12, 24, 2);
+      const saved = isl && isl.bank ? isl.bank.saved : 0, coins = Math.min(6, Math.ceil(saved / 500));
+      ctx.fillStyle = '#f1c40f'; ctx.strokeStyle = '#a07a10'; ctx.lineWidth = 1;
+      for (let i = 0; i < coins; i++) { ctx.beginPath(); ctx.arc(px + 12 + (i % 3) * 7, py + 9 - Math.floor(i / 3) * 3, 3, 0, TAU); ctx.fill(); ctx.stroke(); }
+      for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(px + w - 18 + i * 3, py + 30, 2.5, 0, TAU); ctx.fill(); ctx.stroke(); }
+      drawPerson(ctx, px + w - 16, py + 14, Math.PI / 2, '#1f2a36', isl ? Math.sin(t * 2) : 0, '#111');
+      drawPerson(ctx, cx, py + h - 12, -Math.PI / 2, '#7b3f2a', 0, '#7a1f1f');
     } else if (b.type === 'cartografo') {
       // Casa del cartógrafo: mesa con un mapa abierto, globo terráqueo, rollos y el cartógrafo con su pluma.
       floor(ctx, px, py, w, h, '#a8865a', '#5e3b1c');
@@ -914,7 +935,7 @@
       if (b.hand) drawBundle(ctx, x, y, b.hand, 4);
       if (b.filter) { ctx.fillStyle = D.RES[b.filter].c; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.arc(px + 6, py + 6, 3.5, 0, TAU); ctx.fill(); ctx.stroke(); }
     }
-    if (b.type !== 'almacen' && b.type !== 'muelle' && b.type !== 'cartografo') drawArrow(ctx, b);
+    if (!NO_ARROW.includes(b.type)) drawArrow(ctx, b);
   }
 
   function drawTiles(ctx, isl, x0, y0, x1, y1, t) {

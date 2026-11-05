@@ -64,6 +64,7 @@
 
   PV.onKey = function (code) {
     if (PV.UI.researchOpen() && (code === 'Escape' || code === 'KeyI')) return PV.UI.closeResearch();
+    if (PV.UI.bankOpen() && code === 'Escape') return PV.UI.closeBank();
     if (code === 'KeyI' && (PV.scene === 'sea' || PV.scene === 'island')) return PV.UI.openResearch();
     if (PV.scene === 'sea') PV.Sea.onKey(code);
     else if (PV.scene === 'island') PV.Island.onKey(code);
@@ -92,6 +93,7 @@
       PV.Island.updateAll(dt);
       PV.Port.update(dt);
       PV.Fleet.update(dt);
+      PV.Bank.update(dt);
       if (PV.scene === 'sea') PV.Sea.update(dt);
       if (PV.scene === 'island') { PV.Island.update(dt); PV.Island.render(ctx); }
       else PV.Sea.render(ctx);

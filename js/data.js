@@ -68,6 +68,8 @@
                    desc: 'Artesanos hacen bronce, lona, pólvora y balas explosivas. Clic para elegir receta.' },
     muelle:      { n: 'Muelle',     key: 'KeyM', k: 'M', icon: '⚓', w: 2, h: 2, cost: { doblones: 100, tablones: 15 },
                    desc: 'Va en la costa. Lo que le llega se carga solo al barco (o a tus mercantes) cuando pasan.' },
+    banco:       { n: 'Banquero',   key: 'KeyB', k: 'B', icon: '🏦', w: 2, h: 2, cost: { doblones: 300, tablones: 30, piedra: 30 },
+                   desc: 'Guarda tus doblones: no se pierden si te hunden y dan interés. Clic para depositar, retirar o invertir.' },
     cartografo:  { n: 'Cartógrafo', key: 'KeyC', k: 'C', icon: '🗺️', w: 2, h: 2, cost: { doblones: 120, tablones: 20, piedra: 10 },
                    desc: 'Estudia materiales para investigar mejoras. Mandale lo que pide la investigación actual. Clic para elegir qué investigar.' },
   };
@@ -108,6 +110,19 @@
   //   keep (chance de no gastar el yacimiento), mSpeed / mCap (mercantes), sell (precio de venta).
   // unlock: { build } o { recipe: 'edificio.receta' }.
   D.TECH_ADD = ['carry', 'mCap', 'keep'];
+
+  // Banquero. rate: interés por minuto, cap: saldo máximo que da interés.
+  // Asaltos: cada raidEvery segundos, cada banco con más de raidMin tiene raidChance de perder raidLoss.
+  D.BANK = {
+    rate: 0.005, cap: 3000,
+    raidEvery: 480, raidChance: 0.3, raidMin: 500, raidLoss: 0.12,
+    // p: chance de salir bien, win/lose: cuánto gana o pierde sobre lo invertido. t: segundos.
+    INVEST: {
+      ruta:       { n: 'Ruta comercial',      icon: '🚢', t: 240, p: 0.75, win: 0.35, lose: 0.15, desc: 'Segura: casi siempre gana un poco.' },
+      expedicion: { n: 'Expedición del tesoro', icon: '🗺️', t: 420, p: 0.45, win: 1.3, lose: 0.5,  desc: 'Puede duplicar lo invertido… o perder la mitad.' },
+      contrabando:{ n: 'Contrabando',         icon: '🏴‍☠️', t: 180, p: 0.6, win: 0.7, lose: 1,    desc: 'Rápido y jugoso, pero si la Marina lo agarra se pierde todo.' },
+    },
+  };
   D.TECH = {
     estiba1:  { line: 'log', n: 'Estibadores ágiles', desc: 'Los estibadores caminan más rápido (+40%).', cost: { tablones: 15, piedra: 15 }, fx: { ins: 1.4 } },
     estiba2:  { line: 'log', n: 'Estibadores fuertes', desc: 'Cada estibador lleva hasta 2 cosas por viaje.', req: ['estiba1'], cost: { tablones: 25, lingote_cobre: 10 }, fx: { carry: 1 } },
@@ -132,6 +147,10 @@
     merc2:    { line: 'nav', n: 'Bodegas amplias', desc: 'Los mercantes cargan 30 más.', req: ['merc1'], cost: { tablones: 60, lingote_hierro: 15 }, fx: { mCap: 30 } },
     merc3:    { line: 'nav', n: 'Velas de lona', desc: 'Mercantes +25% de velocidad y 30 más de carga.', req: ['merc2'], cost: { lona: 20, placa_hierro: 10 }, fx: { mSpeed: 1.25, mCap: 30 } },
     regateo:  { line: 'nav', n: 'Regateo', desc: 'Los puertos te pagan 10% más.', cost: { lingote_cobre: 20, tablones: 20 }, fx: { sell: 1.1 } },
+    banca:    { line: 'nav', n: 'Banca', desc: 'Permite construir el Banquero: guarda doblones a salvo del hundimiento y da 0,5% por minuto.', cost: { lingote_cobre: 25, tablones: 30 }, unlock: { build: 'banco' } },
+    inversiones:{ line: 'nav', n: 'Inversiones', desc: 'El Banquero acepta inversiones con riesgo: rutas, expediciones y contrabando.', req: ['banca'], cost: { lingote_hierro: 15, lingote_cobre: 20 }, unlock: { feature: 'inversiones' } },
+    prestamistas:{ line: 'nav', n: 'Prestamistas', desc: 'Interés al doble (1% por minuto) y hasta 15.000 doblones.', req: ['banca'], cost: { lingote_plata: 15, bronce: 10 }, fx: { bankRate: 2, bankCap: 5 } },
+    boveda:   { line: 'nav', n: 'Bóveda reforzada', desc: 'Los asaltos piratas al banco se llevan la mitad.', req: ['banca'], cost: { placa_hierro: 15, piedra: 60 }, fx: { vault: 2 } },
     contactos:{ line: 'nav', n: 'Contactos en el puerto', desc: 'Otro 10% más en las ventas.', req: ['regateo'], cost: { lingote_plata: 10 }, fx: { sell: 1.1 } },
   };
 
