@@ -17,6 +17,12 @@
 
   W.towerHp = tier => 50 + tier * 35;
 
+  // Centro de una casilla de la grilla de la isla, en coordenadas del mar (misma escala que genGrid).
+  W.tileToWorld = function (isl, tx, ty) {
+    const s = Math.max(12, isl.R * 0.08);
+    return [isl.x + (tx - 24) * s * 0.72, isl.y + (ty - 18) * s];
+  };
+
   W.generate = function (seed) {
     const r = U.rng(seed);
     const C = W.SIZE / 2;

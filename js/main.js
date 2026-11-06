@@ -23,19 +23,19 @@
     PV.UI.onScene(s);
   };
 
-  function createState(seed) {
+  function createState(seed, diff) {
     const islands = PV.World.generate(seed);
     const home = islands[0];
     return {
-      v: 1, seed, doblones: 400, nextId: 1, time: 0, islands,
+      v: 1, seed, diff: diff || 'normal', doblones: 400, nextId: 1, time: 0, islands,
       ship: { x: home.x + home.R + 140, y: home.y, a: 0, v: 0, hp: 100, up: { bodega: 0, casco: 0, canones: 0, velas: 0 }, cargo: {} },
       fog: new Array(PV.World.FOG_N * PV.World.FOG_N).fill(0),
       fleet: [],
     };
   }
 
-  PV.newGame = function () {
-    PV.state = createState((Math.random() * 1e9) >>> 0);
+  PV.newGame = function (diff) {
+    PV.state = createState((Math.random() * 1e9) >>> 0, diff);
     PV.Tech.reset();
     PV.Island.ensureGrid(PV.state.islands[0]);
     PV.Sea.init();
@@ -50,6 +50,7 @@
     const s = PV.Save.load();
     if (!s) return;
     PV.state = s;
+    if (!s.diff) s.diff = 'normal';
     PV.Tech.reset();
     PV.Tech.migrate();
     for (const isl of s.islands) {
@@ -58,6 +59,7 @@
       if (isl.port) for (const k in PV.D.RES) if (!isl.market[k]) isl.market[k] = { m: 1, f: 1 };
     }
     PV.Sea.init();
+    PV.Raid.restore();
     PV.setScene('sea');
     PV.UI.toast('Partida cargada.', 'good');
   };
@@ -94,6 +96,7 @@
       PV.Port.update(dt);
       PV.Fleet.update(dt);
       PV.Bank.update(dt);
+      PV.Raid.update(dt);
       if (PV.scene === 'sea') PV.Sea.update(dt);
       if (PV.scene === 'island') { PV.Island.update(dt); PV.Island.render(ctx); }
       else PV.Sea.render(ctx);

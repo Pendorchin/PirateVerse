@@ -53,7 +53,7 @@
         if (digs(type, g.res[ty * g.w + tx])) res++;
       }
     }
-    if (D.base(type) === 'muelle') return touchesWater(isl, x, y, def);
+    if (D.base(type) === 'muelle' || type === 'bateria') return touchesWater(isl, x, y, def);
     return !isDigger(type) || res > 0;
   };
 
@@ -69,7 +69,7 @@
     if (lock) { if (!quiet) PV.UI.toast(`Primero investigá «${D.TECH[lock].n}» en un Cartógrafo (tecla I).`, 'bad'); return null; }
     if (!Isl.canPlace(isl, type, x, y)) {
       const kb = D.base(type);
-      if (!quiet) PV.UI.toast(kb === 'extractor' ? 'La mina tiene que ir sobre piedra o mineral.' : kb === 'lenadores' ? 'Los leñadores tienen que ir sobre árboles.' : kb === 'muelle' ? 'El muelle tiene que tocar el agua.' : 'No se puede construir ahí.', 'bad');
+      if (!quiet) PV.UI.toast(kb === 'extractor' ? 'La mina tiene que ir sobre piedra o mineral.' : kb === 'lenadores' ? 'Los leñadores tienen que ir sobre árboles.' : kb === 'muelle' ? 'El muelle tiene que tocar el agua.' : kb === 'bateria' ? 'La batería tiene que ir en la costa.' : 'No se puede construir ahí.', 'bad');
       return null;
     }
     const cost = D.BUILD[type].cost;
@@ -85,6 +85,7 @@
     if (kd === 'clasificador') { b.filter = null; b.hold = null; }
     if (kd === 'insertador') { b.filter = null; b.hand = null; b.handN = 0; }
     if (kd === 'cartografo') b.inv = {};
+    if (kd === 'bateria') { b.ammo = {}; b.cd = 0; }
     if (D.RECIPES[type]) { b.recipe = Object.keys(D.RECIPES[type])[0]; b.inv = {}; }
     if (kd === 'muelle') { b.store = {}; b.unload = []; }
     isl.buildings.push(b);
@@ -106,7 +107,7 @@
     if (b.hold) back.push(b.hold);
     if (b.hand) for (let i = 0; i < (b.handN || 1); i++) back.push(b.hand);
     for (const k of back) PV.Inv.add(isl.storage, k, 1);
-    for (const bag of [b.inv, b.store]) if (bag) for (const k in bag) PV.Inv.add(isl.storage, k, bag[k]);
+    for (const bag of [b.inv, b.store, b.ammo]) if (bag) for (const k in bag) PV.Inv.add(isl.storage, k, bag[k]);
     if (D.base(b.type) === 'banco') PV.Bank.onRemove(isl);
   }
 
@@ -155,6 +156,10 @@
         if (!dry) PV.Inv.add(b.inv, item, 1);
         return true;
       }
+      case 'bateria':
+        if (b.broken || !D.RAID.battery.ammo[item] || PV.Inv.sum(b.ammo) >= D.RAID.battery.max) return false;
+        if (!dry) PV.Inv.add(b.ammo, item, 1);
+        return true;
       case 'cartografo':
         if ((b.inv[item] || 0) >= Math.min(10, PV.Tech.need(item))) return false;
         if (!dry) PV.Inv.add(b.inv, item, 1);
@@ -195,6 +200,7 @@
   }
 
   function updateBuilding(isl, b, dt) {
+    if (b.broken) return;
     const g = isl.grid, def = D.BUILD[b.type], spd = spdOf(b);
     switch (D.base(b.type)) {
       case 'extractor': case 'lenadores': {
@@ -326,7 +332,10 @@
   const missing = (have, need) => Object.keys(need).filter(k => (have[k] || 0) < need[k]).map(k => D.RES[k].n);
 
   function stuckReason(isl, b) {
+    if (b.broken) return { ic: '🔥', lvl: 'dead', msg: 'Roto por los piratas: hacé clic para repararlo (' + Isl.costTxt(Isl.repairCost(b)) + ').' };
     switch (D.base(b.type)) {
+      case 'bateria':
+        return PV.Inv.sum(b.ammo) ? null : { ic: '💤', lvl: 'wait', msg: 'Sin balas: dispara metralla débil. Mandale balas por un sendero.' };
       case 'extractor': case 'lenadores':
         if (b.out.length) return outBlocked(isl, b);
         if (b.empty) return { ic: '⛔', lvl: 'dead', msg: 'Yacimiento agotado: quitalo y ponelo sobre otro.' };
@@ -365,11 +374,43 @@
   }
   Isl.stuckReason = stuckReason;
 
+  // ---------- Edificios rotos ----------
+
+  Isl.repairCost = function (b) {
+    const c = D.BUILD[b.type].cost, out = {};
+    for (const k in c) out[k] = Math.ceil(c[k] * D.RAID.repairCost);
+    return out;
+  };
+  Isl.costTxt = c => Object.keys(c).map(k => c[k] + ' ' + (k === 'doblones' ? 'doblones' : D.RES[k].n)).join(', ');
+
+  function repair(isl, b) {
+    const c = Isl.repairCost(b);
+    if (!PV.Inv.canPay(c, isl)) return PV.UI.toast('Para reparar te falta: ' + Isl.costTxt(c), 'bad');
+    PV.Inv.pay(c, isl);
+    b.broken = false;
+    PV.UI.toast(`🔨 ${D.BUILD[b.type].n} reparado.`, 'good');
+  }
+
+  // Cada cuartel arregla gratis un edificio roto cada tanto.
+  function repairByBarracks(isl, dt) {
+    for (const c of isl.buildings) {
+      if (c.type !== 'cuartel' || c.broken) continue;
+      const b = isl.buildings.find(o => o.broken);
+      if (!b) { c.rt = 0; continue; }
+      c.rt = (c.rt || 0) + dt;
+      if (c.rt >= D.RAID.repairEvery) {
+        c.rt = 0; b.broken = false;
+        if (isl === Isl.cur) PV.UI.toast(`⚔️ La guarnición reparó ${D.BUILD[b.type].n}.`, 'good');
+      }
+    }
+  }
+
   Isl.updateAll = function (dt) {
     for (const isl of PV.state.islands) {
       if (!isl.owned || !isl.grid || !isl.buildings.length) continue;
       if (!isl._occ) Isl.rebuildOcc(isl);
       for (const b of isl.buildings) updateBuilding(isl, b, dt);
+      repairByBarracks(isl, dt);
       if (isl !== Isl.cur) continue;
       // Solo se avisa si sigue trabado un rato, para que no parpadee.
       for (const b of isl.buildings) {
@@ -553,6 +594,7 @@
       }
       if (Isl.drag) {
         if (Isl.drag.mode === 'belt') dragBelt(isl, tx, ty);
+        else if (Isl.drag.mode === 'wall') { if (!occAt(isl, tx, ty)) tryPlace(isl, 'empalizada', tx, ty, 0, true); }
         else removeAt(isl, tx, ty);
       }
     } else if (type === 'down') {
@@ -562,7 +604,8 @@
       else if (e.button === 0 && !Isl.sel) {
         const b = occAt(isl, tx, ty);
         const kb = b && D.base(b.type);
-        if (kb === 'cartografo') PV.UI.openResearch();
+        if (b && b.broken) repair(isl, b);
+        else if (kb === 'cartografo') PV.UI.openResearch();
         else if (kb === 'banco') PV.UI.openBank();
         else if (b && PV.UI.CHOOSE[kb]) PV.UI.chooser(b, e.clientX, e.clientY);
       }
@@ -575,6 +618,7 @@
         } else {
           const [x, y] = ghostPos(Isl.sel, tx, ty);
           tryPlace(isl, Isl.sel, x, y, Isl.dir);
+          if (Isl.sel === 'empalizada') Isl.drag = { mode: 'wall' };
         }
       }
     } else if (type === 'up') {
@@ -628,6 +672,7 @@
       const def = D.BUILD[b.type], kb = D.base(b.type);
       let s = `<b>${def.icon} ${def.n}</b><br>`;
       if (def.of) s += `<span style="color:#f5d76e">★ ${def.desc}</span><br>`;
+      if (b.broken) s += `<span style="color:#ff7b6b">🔥 Roto. Clic para reparar: ${Isl.costTxt(Isl.repairCost(b))}</span><br>`;
       if (b._warn) s += `<span style="color:${b._warn.lvl === 'wait' ? '#f1c40f' : '#ff7b6b'}">${b._warn.ic} ${b._warn.msg}</span><br>`;
       if (isDigger(b.type)) {
         const tot = resUnder(isl, b), keys = Object.keys(tot);
@@ -650,6 +695,11 @@
         const r = D.RECIPES[b.type][b.recipe];
         s += `Receta: <b>${recipeTxt(r)}</b><br>Tiene: ${Object.keys(r.in).map(k => D.RES[k].n + ' ' + (b.inv[k] || 0) + '/' + r.in[k]).join(', ')}`;
         s += b.on ? '<br>🔨 Trabajando…' : '<br><i>Clic para cambiar la receta.</i>';
+      } else if (kb === 'bateria') {
+        const am = Object.keys(b.ammo).filter(k => b.ammo[k] > 0);
+        s += `Munición: ${am.length ? am.map(k => D.RES[k].n + ' ' + b.ammo[k]).join(', ') : 'ninguna (metralla débil)'} / ${D.RAID.battery.max}<br>Alcance: ${D.RAID.battery.range} · daño ${D.RAID.battery.ammo.balas} con balas, ${D.RAID.battery.ammo.bala_explosiva} con explosivas`;
+      } else if (kb === 'empalizada' || kb === 'cuartel' || kb === 'torre_vigia') {
+        s += `${def.desc}<br>Protección de la isla contra saqueo: <b>${Math.round(PV.Raid.protection(isl) * 100)}%</b>`;
       } else if (kb === 'banco') {
         const bk = PV.Bank.of(isl);
         s += `Guardado: <b>${U.fmt(Math.floor(bk.saved))}</b> doblones<br>Interés: ${(PV.Bank.rate(isl) * 100).toFixed(1).replace('.', ',')}% por minuto (hasta ${U.fmt(PV.Bank.cap(isl))})` + (bk.inv.length ? `<br>Inversiones en curso: ${bk.inv.length}` : '') + '<br><i>Clic para abrir el banco.</i>';
@@ -773,7 +823,7 @@
     ctx.strokeStyle = line; ctx.lineWidth = 2; ctx.stroke();
   }
 
-  const NO_ARROW = ['almacen', 'muelle', 'cartografo', 'banco'];
+  const NO_ARROW = ['almacen', 'muelle', 'cartografo', 'banco', 'bateria', 'empalizada', 'cuartel', 'torre_vigia'];
   function drawMachine(ctx, b, isl, t) {
     const def = D.BUILD[b.type], px = b.x * T, py = b.y * T, w = def.w * T, h = def.h * T;
     if (def.of) return drawEvolved(ctx, b, isl, t, def);
@@ -897,6 +947,57 @@
       keys.forEach((k, i) => drawBundle(ctx, px + 20 + (i % 2) * 24, py + 20 + Math.floor(i / 2) * 24, k, 7));
       ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 14px Georgia'; ctx.textAlign = 'center';
       if (!keys.length) ctx.fillText('⚓', cx, cy + 5);
+    } else if (b.type === 'bateria') {
+      // Plataforma de piedra con un cañón, barriles de pólvora y el artillero.
+      floor(ctx, px, py, w, h, '#8a8278', '#4e463a');
+      ctx.fillStyle = '#6d655a'; ctx.beginPath(); ctx.arc(cx, cy, 22, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#4e463a'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(b.dir * Math.PI / 2);
+      ctx.fillStyle = '#5a3a1e'; rrect(ctx, -10, -8, 18, 16, 3); ctx.fill();
+      ctx.fillStyle = '#1a1a1a'; rrect(ctx, -4, -4, 26, 8, 3); ctx.fill();
+      ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(-4, 0, 6, 0, TAU); ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = '#7a5230';
+      for (const [bx, by] of [[px + 9, py + h - 10], [px + 18, py + h - 8]]) { ctx.beginPath(); ctx.arc(bx, by, 5, 0, TAU); ctx.fill(); }
+      const n = b.ammo ? Math.min(6, PV.Inv.sum(b.ammo)) : 0;
+      ctx.fillStyle = '#2b2b2b';
+      for (let i = 0; i < n; i++) { ctx.beginPath(); ctx.arc(px + w - 10 - (i % 3) * 6, py + 9 + Math.floor(i / 3) * 6, 2.6, 0, TAU); ctx.fill(); }
+      drawPerson(ctx, px + w - 14, py + h - 14, -Math.PI * 0.75, '#2c3e50', 0, '#1a1a1a');
+    } else if (b.type === 'empalizada') {
+      // Troncos clavados con punta.
+      ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(px + 3, py + 5, T - 4, T - 6);
+      for (let i = 0; i < 4; i++) {
+        const lx = px + 3 + i * 7;
+        ctx.fillStyle = i % 2 ? '#7a5230' : '#8b6239'; rrect(ctx, lx, py + 6, 6, T - 8, 2); ctx.fill();
+        ctx.fillStyle = '#c9a26b'; ctx.beginPath(); ctx.arc(lx + 3, py + 7, 2.6, 0, TAU); ctx.fill();
+      }
+      ctx.strokeStyle = '#4a3020'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(px + 2, py + T * 0.55); ctx.lineTo(px + T - 2, py + T * 0.55); ctx.stroke();
+    } else if (b.type === 'cuartel') {
+      // Campamento militar: carpas, fogata, armas y soldados de guardia.
+      floor(ctx, px, py, w, h, '#8f8a5a', '#4e4a2a');
+      for (const [tx, ty, c] of [[px + 22, py + 22, '#c8b48a'], [px + w - 22, py + 22, '#b8a47a']]) {
+        ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(tx, ty - 16); ctx.lineTo(tx + 16, ty + 12); ctx.lineTo(tx - 16, ty + 12); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = '#6b5a3a'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(tx, ty - 16); ctx.lineTo(tx, ty + 12); ctx.stroke();
+      }
+      ctx.fillStyle = '#5a3a1e'; ctx.beginPath(); ctx.arc(cx, cy + 14, 7, 0, TAU); ctx.fill();
+      ctx.fillStyle = `rgba(255,140,40,${0.6 + Math.sin(t * 9) * 0.2})`; ctx.beginPath(); ctx.arc(cx, cy + 14, 4, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5;
+      for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(px + 12 + i * 5, py + h - 8); ctx.lineTo(px + 14 + i * 5, py + h - 26); ctx.stroke(); }
+      const march = isl ? Math.sin(t * 1.5) * 10 : 0;
+      drawPerson(ctx, cx - 18 + march, py + h - 18, 0, '#8e1b1b', isl ? t * 6 : 0, '#1a1a1a');
+      drawPerson(ctx, cx + 18 - march, py + h - 18, Math.PI, '#8e1b1b', isl ? t * 6 + 2 : 0, '#1a1a1a');
+      drawPerson(ctx, px + w - 14, cy + 6, -Math.PI / 2, '#8e1b1b', 0, '#1a1a1a');
+    } else if (b.type === 'torre_vigia') {
+      // Torre de madera vista desde arriba con el vigía y su catalejo.
+      ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(px + 5, py + 6, T - 6, T - 6);
+      ctx.fillStyle = '#7a5230'; ctx.fillRect(px + 3, py + 3, T - 6, T - 6);
+      ctx.strokeStyle = '#4a3020'; ctx.lineWidth = 1.5; ctx.strokeRect(px + 3, py + 3, T - 6, T - 6);
+      ctx.beginPath(); ctx.moveTo(px + 3, py + 3); ctx.lineTo(px + T - 3, py + T - 3); ctx.moveTo(px + T - 3, py + 3); ctx.lineTo(px + 3, py + T - 3); ctx.stroke();
+      const look = isl ? t * 0.8 : -0.6;
+      drawPerson(ctx, cx, cy, look, '#2c3e50', 0, '#7a1f1f');
+      ctx.strokeStyle = '#d4a017'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(cx + Math.cos(look) * 4, cy + Math.sin(look) * 4); ctx.lineTo(cx + Math.cos(look) * 11, cy + Math.sin(look) * 11); ctx.stroke();
     } else if (b.type === 'banco') {
       // Casa del banquero: piso de piedra, mostrador, cofre con monedas y el banquero de galera.
       floor(ctx, px, py, w, h, '#9a8f7e', '#4e463a');
@@ -956,6 +1057,21 @@
       if (b.filter) { ctx.fillStyle = D.RES[b.filter].c; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.arc(px + 6, py + 6, 3.5, 0, TAU); ctx.fill(); ctx.stroke(); }
     }
     if (!NO_ARROW.includes(D.base(b.type))) drawArrow(ctx, b);
+    if (b.broken) drawBroken(ctx, b, t);
+  }
+
+  function drawBroken(ctx, b, t) {
+    const def = D.BUILD[b.type], px = b.x * T, py = b.y * T, w = def.w * T, h = def.h * T;
+    ctx.fillStyle = 'rgba(30,20,15,0.55)'; ctx.fillRect(px, py, w, h);
+    ctx.strokeStyle = '#2a1a10'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(px + w * 0.2, py + h * 0.3); ctx.lineTo(px + w * 0.45, py + h * 0.55); ctx.lineTo(px + w * 0.35, py + h * 0.8); ctx.stroke();
+    for (let i = 0; i < 3; i++) {
+      const ph = (t * 0.7 + i / 3) % 1, fx = px + w * (0.3 + i * 0.2);
+      ctx.fillStyle = `rgba(255,${120 + i * 30},30,${0.8 - ph * 0.6})`;
+      ctx.beginPath(); ctx.arc(fx, py + h * 0.6 - ph * 8, 4 + (1 - ph) * 3, 0, TAU); ctx.fill();
+      ctx.fillStyle = `rgba(60,60,60,${0.45 - ph * 0.4})`;
+      ctx.beginPath(); ctx.arc(fx + ph * 6, py + h * 0.4 - ph * 26, 4 + ph * 8, 0, TAU); ctx.fill();
+    }
   }
 
   // Edificio evolucionado: el mismo dibujo que su base, más grande, con borde dorado y un estandarte.

@@ -40,6 +40,26 @@
     });
   }
 
+  // Barco de un asalto pirata: navega hacia la isla atacada (home) y la rodea.
+  Sea.spawnRaider = function (isl, x, y, t, a) {
+    const hp = 40 + t * 35;
+    Sea.enemies.push({
+      x, y, a, v: 60, home: isl.id, pa: Math.atan2(y - isl.y, x - isl.x), tier: t, hp, max: hp, guns: Math.min(t + 1, 5), dmg: 4 + t * 2,
+      speed: 85 + t * 12, rl: 1 + Math.random() * 2, rr: 1 + Math.random() * 2, aggro: false, raid: true,
+    });
+  };
+
+  // Disparo de una batería de la isla al barco e. En el mar se ve la bala; fuera, se resuelve al instante.
+  Sea.batteryShot = function (x, y, e, dmg) {
+    if (PV.scene === 'sea') {
+      const spd = 380, d = U.dist(x, y, e.x, e.y), tt = d / spd;
+      const tx = e.x + Math.cos(e.a) * e.v * tt, ty = e.y + Math.sin(e.a) * e.v * tt;
+      const ang = Math.atan2(ty - y, tx - x) + (Math.random() - 0.5) * 0.06;
+      Sea.bullets.push({ x, y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, life: Math.min(1.5, tt + 0.25), o: 'p', dmg });
+      for (let k = 0; k < 5; k++) puff(x, y, Math.cos(ang) * 50, Math.sin(ang) * 50, 'rgba(230,230,230,0.8)', 0.7, 6);
+    } else if (Math.random() < 0.75) damageEnemy(e, dmg);
+  };
+
   Sea.towersAlive = isl => isl.towers.filter(t => t.hp > 0).length;
   Sea.guardsAlive = isl => Sea.enemies.filter(e => e.home === isl.id).length;
   Sea.conquerCost = isl => 60 + (isl.tier - 1) * 150;
@@ -165,7 +185,8 @@
       Sea.enemies.splice(Sea.enemies.indexOf(e), 1);
       loot(e.tier, e.x, e.y);
       PV.UI.toast('¡Barco pirata hundido!', 'good');
-      checkClear(PV.state.islands[e.home]);
+      if (e.raid) PV.Raid.onKill(e);
+      else checkClear(PV.state.islands[e.home]);
     }
   }
 
@@ -516,6 +537,20 @@
     } else if (!isl.port && (Sea.towersAlive(isl) || Sea.guardsAlive(isl))) {
       PV.Spr.draw(ctx, 'bandera', isl.x, isl.y + 14, 1.3);
     }
+    if (isl.owned) {
+      // Baterías de la isla, apuntando al atacante más cercano.
+      for (const b of isl.buildings) {
+        if (b.type !== 'bateria') continue;
+        const [bx, by] = PV.Raid.batteryPos(isl, b);
+        let a = Math.atan2(by - isl.y, bx - isl.x);
+        const e = PV.Raid.ships().sort((p, q) => U.dist(bx, by, p.x, p.y) - U.dist(bx, by, q.x, q.y))[0];
+        if (e && U.dist(bx, by, e.x, e.y) < D.RAID.battery.range) a = Math.atan2(e.y - by, e.x - bx);
+        ctx.fillStyle = '#6d6458'; ctx.beginPath(); ctx.arc(bx, by, 9, 0, TAU); ctx.fill();
+        ctx.save(); ctx.translate(bx, by); ctx.rotate(a);
+        ctx.fillStyle = b.broken ? '#555' : '#1a1a1a'; ctx.fillRect(0, -2.5, 13, 5);
+        ctx.restore();
+      }
+    }
     if (isl.owned && isl.buildings.length) {
       // Humito de la fábrica para mostrar que la isla produce
       ctx.fillStyle = 'rgba(80,80,80,0.35)';
@@ -670,6 +705,13 @@
       ctx.beginPath(); ctx.arc(x0 + isl.x * k, y0 + isl.y * k, Math.max(2.5, isl.R * k), 0, TAU); ctx.fill();
       if (isl.owned) { ctx.strokeStyle = '#7cfc00'; ctx.lineWidth = 1.5; ctx.stroke(); }
     }
+    const cur = PV.Raid.st().cur;
+    if (cur && PV.Raid.watched(S.islands[cur.isl])) {
+      ctx.fillStyle = '#ff4d4d';
+      for (const e of PV.Raid.ships()) { ctx.beginPath(); ctx.arc(x0 + e.x * k, y0 + e.y * k, 3, 0, TAU); ctx.fill(); }
+      const ti = S.islands[cur.isl];
+      ctx.strokeStyle = '#ff4d4d'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x0 + ti.x * k, y0 + ti.y * k, ti.R * k + 5 + Math.sin(PV.time * 6) * 1.5, 0, TAU); ctx.stroke();
+    }
     ctx.fillStyle = '#85c1e9';
     for (const m of PV.Fleet.list()) ctx.fillRect(x0 + m.x * k - 1.5, y0 + m.y * k - 1.5, 3, 3);
     const sh = S.ship;
@@ -714,7 +756,7 @@
 
     for (const e of Sea.enemies) {
       if (e.x < x0 || e.x > x1 || e.y < y0 || e.y > y1) continue;
-      drawShip(ctx, e, '#2b2b2b', '#4a3020', e.guns, '#f5f5f5');
+      drawShip(ctx, e, e.raid ? '#7b1414' : '#2b2b2b', '#4a3020', e.guns, '#f5f5f5');
       if (e.hp < e.max) hpBar(ctx, e.x, e.y - 34, e.hp / e.max);
     }
     ctx.textAlign = 'center'; ctx.font = '12px Georgia';

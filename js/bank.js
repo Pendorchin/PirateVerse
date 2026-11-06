@@ -1,11 +1,10 @@
 // Banquero: guarda doblones en una isla (no se pierden al hundirte), paga interés
-// y, con investigación, permite inversiones con riesgo. Los piratas pueden asaltar el banco.
+// y, con investigación, permite inversiones con riesgo. Si los piratas saquean la isla, se llevan una parte.
 // Cada isla con banquero tiene isl.bank = { saved, inv: [{ k, amt, t }] }.
 (function (PV) {
   'use strict';
   const D = PV.D, U = PV.U;
   const Bank = {};
-  let raidT = 0;
 
   Bank.of = isl => isl.bank || (isl.bank = { saved: 0, inv: [] });
   Bank.has = isl => !!(isl && isl.owned && (isl.buildings || []).some(b => D.base(b.type) === 'banco'));
@@ -60,18 +59,6 @@
       for (const it of b.inv) it.t -= dt;
       for (const it of b.inv.filter(i => i.t <= 0)) settle(isl, it);
       b.inv = b.inv.filter(i => i.t > 0);
-    }
-    // Asaltos piratas: de vez en cuando roban una parte de lo guardado.
-    raidT += dt;
-    if (raidT >= D.BANK.raidEvery) {
-      raidT = 0;
-      for (const isl of list) {
-        const b = Bank.of(isl);
-        if (b.saved < D.BANK.raidMin || Math.random() > D.BANK.raidChance) continue;
-        const lost = Math.round(b.saved * D.BANK.raidLoss / PV.Tech.fx('vault') / (Bank.big(isl) ? 2 : 1));
-        b.saved -= lost;
-        PV.UI.toast(`🏴‍☠️ ¡Piratas asaltaron el banco de ${isl.name} y se llevaron ${U.fmt(lost)} doblones!`, 'bad');
-      }
     }
   };
 

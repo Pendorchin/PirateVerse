@@ -213,3 +213,21 @@ img.shipart { width: 122px; image-rendering: pixelated; }
 #buildbar button { flex-shrink: 0; }
 #buildbar button { width: 100px; min-width: 0 !important; white-space: normal; text-align: center; }
 #buildbar button small { line-height: 1.2; }
+
+/* ---------- Pestañas de construcción ---------- */
+#buildcats { position: fixed; left: 50%; transform: translateX(-50%); bottom: 160px; display: flex; gap: 4px; z-index: 5; }
+#buildcats button { padding: 5px 12px; background: rgba(242,228,196,.92); border-radius: 8px 8px 0 0; font-size: 13px; }
+#buildcats button.on { background: var(--gold); box-shadow: 0 0 0 2px #fff inset; font-weight: bold; }
+#buildbar button.offcat { display: none; }
+
+/* ---------- Asaltos ---------- */
+#raidBanner { position: fixed; left: 50%; top: 58px; transform: translateX(-50%); z-index: 20; padding: 8px 18px; border-radius: 10px;
+  background: rgba(120,20,20,.92); color: #fff3e0; border: 2px solid #f5b041; font-size: 15px; box-shadow: 0 4px 14px rgba(0,0,0,.4);
+  animation: raidPulse 1.6s ease-in-out infinite; }
+@keyframes raidPulse { 50% { box-shadow: 0 0 18px rgba(255,80,40,.8); } }
+
+/* ---------- Dificultad ---------- */
+#diffPick { display: flex; flex-direction: column; gap: 6px; margin: 8px auto; max-width: 420px; }
+#diffPick.hidden { display: none; }
+#diffPick button { display: flex; flex-direction: column; align-items: flex-start; text-align: left; padding: 8px 12px; }
+#diffPick button small { font-size: 12px; font-weight: normal; opacity: .85; margin-top: 2px; }

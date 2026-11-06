@@ -73,6 +73,14 @@
                    desc: 'Va en la costa. Lo que le llega se carga solo al barco (o a tus mercantes) cuando pasan.' },
     banco:       { n: 'Banquero',   key: 'KeyB', k: 'B', icon: '🏦', w: 2, h: 2, cost: { doblones: 300, tablones: 30, piedra: 30 },
                    desc: 'Guarda tus doblones: no se pierden si te hunden y dan interés. Clic para depositar, retirar o invertir.' },
+    bateria:     { n: 'Batería',    key: 'KeyG', k: 'G', icon: '💣', w: 2, h: 2, cost: { doblones: 200, piedra: 30, lingote_hierro: 10 },
+                   desc: 'Cañones en la costa: le disparan a los piratas que atacan la isla. Mandale balas por senderos (las explosivas pegan más).' },
+    empalizada:  { n: 'Empalizada', key: 'KeyH', k: 'H', icon: '🪵', w: 1, h: 1, cost: { doblones: 3, tablones: 2 },
+                   desc: 'Muro de troncos. Cada tramo reduce lo que roban y protege los edificios (arrastrá para hacer muros).' },
+    cuartel:     { n: 'Cuartel',    key: 'KeyJ', k: 'J', icon: '⚔️', w: 3, h: 3, cost: { doblones: 350, tablones: 40, piedra: 30 },
+                   desc: 'Guarnición: reduce el saqueo y repara sola los edificios rotos con el tiempo.' },
+    torre_vigia: { n: 'Torre vigía', key: 'KeyK', k: 'K', icon: '🔭', w: 1, h: 1, cost: { doblones: 120, tablones: 20, piedra: 10 },
+                   desc: 'Ve a los piratas desde lejos: avisa un minuto antes y los marca en el mapa.' },
     cartografo:  { n: 'Cartógrafo', key: 'KeyC', k: 'C', icon: '🗺️', w: 2, h: 2, cost: { doblones: 120, tablones: 20, piedra: 10 },
                    desc: 'Estudia materiales para investigar mejoras. Mandale lo que pide la investigación actual. Clic para elegir qué investigar.' },
   };
@@ -106,6 +114,32 @@
                       desc: 'Banco grande: +50% de interés, guarda el doble con interés, los asaltos se llevan la mitad y permite invertir en la Compañía de Indias.' },
   };
   for (const k in EVO) D.BUILD[k] = Object.assign({ key: '', k: '★' }, EVO[k]);
+
+  // Pestañas del menú de construcción. Las evoluciones van con su edificio base.
+  D.BUILD_CATS = [
+    { k: 'rec', n: 'Recursos', icon: '⛏️', list: ['lenadores', 'extractor', 'cinta', 'almacen'] },
+    { k: 'fab', n: 'Fábricas', icon: '🔥', list: ['aserradero', 'fundicion', 'herreria', 'taller'] },
+    { k: 'log', n: 'Logística', icon: '💪', list: ['clasificador', 'insertador', 'muelle'] },
+    { k: 'eco', n: 'Investigación y banca', icon: '🗺️', list: ['cartografo', 'banco'] },
+    { k: 'def', n: 'Defensa', icon: '🛡️', list: ['bateria', 'empalizada', 'cuartel', 'torre_vigia'] },
+  ];
+  for (const c of D.BUILD_CATS) for (const k of c.list) D.BUILD[k].cat = c.k;
+  for (const k in EVO) D.BUILD[k].cat = D.BUILD[EVO[k].of].cat;
+
+  // ---------- Asaltos piratas ----------
+  //   first: segundos hasta el primer asalto; every: base entre asaltos (baja con tu imperio, mínimo minEvery).
+  //   warn: aviso previo (la Torre vigía suma watch). siege: segundos de asedio hasta saquear.
+  //   loot: parte del almacén y del banco que se llevan; wall/barracks: cuánto reduce cada empalizada / cuartel.
+  D.RAID = {
+    first: 600, every: 540, minEvery: 180, warn: 60, watch: 60, siege: 75,
+    loot: 0.3, wall: 0.02, wallMax: 0.5, barracks: 0.3, barracksMax: 0.6,
+    repairEvery: 30, repairCost: 0.3,
+    battery: { range: 400, cd: 2.2, dmg: 6, ammo: { bala_explosiva: 22, balas: 13 }, max: 20 },
+  };
+  D.DIFFS = {
+    normal: { n: 'Normal', desc: 'Si los piratas ganan un asalto, saquean el almacén y el banco y rompen algunos edificios. La isla sigue siendo tuya.' },
+    dificil: { n: 'Difícil', desc: 'Si los piratas ganan, además te quitan la isla (menos Isla Refugio) y tenés que reconquistarla.' },
+  };
   D.base = t => (D.BUILD[t] && D.BUILD[t].of) || t;
 
   D.SMELT = { cobre: 'lingote_cobre', hierro: 'lingote_hierro', plata: 'lingote_plata', oro: 'lingote_oro', estano: 'lingote_estano' };
@@ -151,10 +185,8 @@
   D.TECH_ADD = ['carry', 'mCap', 'keep'];
 
   // Banquero. rate: interés por minuto, cap: saldo máximo que da interés.
-  // Asaltos: cada raidEvery segundos, cada banco con más de raidMin tiene raidChance de perder raidLoss.
   D.BANK = {
     rate: 0.005, cap: 3000,
-    raidEvery: 480, raidChance: 0.3, raidMin: 500, raidLoss: 0.12,
     // p: chance de salir bien, win/lose: cuánto gana o pierde sobre lo invertido. t: segundos.
     INVEST: {
       indias:     { n: 'Compañía de Indias',  icon: '🏛️', t: 600, p: 0.7, win: 1.0, lose: 0.3, desc: 'Solo con Casa de cambio. Larga, pero rinde mucho.', big: true },

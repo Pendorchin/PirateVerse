@@ -10,17 +10,22 @@
   const HELP = {
     sea: [[['I'], 'investigación'], [['W', 'S'], 'velas'], [['A', 'D'], 'timón'], [['Q'], 'cañones babor'], [['E'], 'cañones estribor'], [['F'], 'interactuar'], [['Rueda'], 'zoom']],
     port: [[['Esc'], 'zarpar']],
-    island: [[['1', '0'], 'edificios'], [['M'], 'muelle'], [['C'], 'cartógrafo'], [['B'], 'banquero'], [['I'], 'investigación'], [['R'], 'rotar'], [['Clic'], 'construir · elegir receta'], [['Clic der.'], 'quitar'],
+    island: [[['1', '0'], 'edificios'], [['M'], 'muelle'], [['C'], 'cartógrafo'], [['B'], 'banquero'], [['G', 'K'], 'defensas'], [['I'], 'investigación'], [['R'], 'rotar'], [['Clic'], 'construir · elegir receta'], [['Clic der.'], 'quitar'],
       [['W', 'A', 'S', 'D'], 'cámara'], [['Rueda'], 'zoom'], [['Esc'], 'zarpar']],
   };
   const resName = k => D.RES[k].n;
-  const helpHtml = list => list.map(([keys, label]) => `<span>${keys.map(k => `<kbd>${k}</kbd>`).join(keys.length === 2 && keys[0] === '1' ? '–' : '')} ${label}</span>`).join('');
+  const helpHtml = list => list.map(([keys, label]) => `<span>${keys.map(k => `<kbd>${k}</kbd>`).join(keys.length === 2 && ['1', 'G'].includes(keys[0]) ? '–' : '')} ${label}</span>`).join('');
 
   UI.init = function () {
     $('btnNew').onclick = () => {
       if (PV.Save.has() && !confirm('¿Empezar una partida nueva? Se pierde la guardada.')) return;
-      PV.newGame();
+      $('diffPick').classList.remove('hidden');
     };
+    document.querySelectorAll('#diffPick button').forEach(b => {
+      const d = D.DIFFS[b.dataset.diff];
+      b.innerHTML = `<b>${d.n}</b><small>${d.desc}</small>`;
+      b.onclick = () => { $('diffPick').classList.add('hidden'); PV.newGame(b.dataset.diff); };
+    });
     $('btnContinue').onclick = () => PV.continueGame();
     $('btnContinue').disabled = !PV.Save.has();
 
@@ -64,9 +69,14 @@
     });
 
     const bar = $('buildbar');
+    $('buildcats').innerHTML = D.BUILD_CATS.map(c => `<button data-cat="${c.k}">${c.icon} ${c.n}</button>`).join('');
+    $('buildcats').addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (b) UI.setCat(b.dataset.cat);
+    });
     bar.innerHTML = Object.keys(D.BUILD).map(k => {
       const d = D.BUILD[k];
-      return `<button data-b="${k}" title="${d.desc}"><b>${d.k}</b><img class="ic" alt="" src="${PV.Island.thumb(k)}">${d.n}<small data-cost="${k}"></small></button>`;
+      return `<button data-b="${k}" data-cat="${d.cat}" title="${d.desc}"><b>${d.k}</b><img class="ic" alt="" src="${PV.Island.thumb(k)}">${d.n}<small data-cost="${k}"></small></button>`;
     }).join('');
     // Con muchos edificios la barra se desplaza con la rueda.
     bar.addEventListener('wheel', e => {
@@ -80,6 +90,15 @@
     });
   };
 
+  // Pestaña del menú de construcción (también cambia sola al elegir con una tecla).
+  UI.cat = 'rec';
+  UI.setCat = function (c) {
+    UI.cat = c;
+    document.querySelectorAll('#buildcats button').forEach(b => b.classList.toggle('on', b.dataset.cat === c));
+    document.querySelectorAll('#buildbar button').forEach(b => b.classList.toggle('offcat', b.dataset.cat !== c));
+    $('buildbar').scrollLeft = 0;
+  };
+
   UI.onScene = function (s) {
     const show = (id, on) => $(id).classList.toggle('hidden', !on);
     show('menu', s === 'menu');
@@ -88,6 +107,8 @@
     show('help', s !== 'menu');
     show('islandPanel', s === 'island');
     show('buildbar', s === 'island');
+    show('buildcats', s === 'island');
+    if (s === 'island') UI.setCat(UI.cat);
     show('portPanel', s === 'port');
     show('tooltip', false);
     UI.closeChooser();
@@ -254,7 +275,7 @@
       return `<div class="binv run">${o.icon} ${o.n}: <b>${U.fmt(it.amt)}</b> <span class="muted">· vuelve en ${Math.floor(it.t / 60)}:${String(Math.floor(it.t % 60)).padStart(2, '0')}</span></div>`;
     }).join('') : '';
     $('bank').innerHTML = `<div class="rhead"><h2>🏦 Banquero de ${isl.name}</h2><button data-act="close">Cerrar (Esc)</button></div>
-      <p class="muted">Lo guardado acá no se pierde si te hunden y gana <b>${(PV.Bank.rate(isl) * 100).toFixed(1).replace('.', ',')}% por minuto</b> (hasta ${U.fmt(PV.Bank.cap(isl))} doblones). Ojo: los piratas a veces asaltan los bancos.</p>
+      <p class="muted">Lo guardado acá no se pierde si te hunden y gana <b>${(PV.Bank.rate(isl) * 100).toFixed(1).replace('.', ',')}% por minuto</b> (hasta ${U.fmt(PV.Bank.cap(isl))} doblones). Ojo: si los piratas saquean esta isla, se llevan una parte.</p>
       <div class="bsum"><div><i class="coin"></i> Encima: <b>${U.fmt(dob)}</b></div><div>🏦 Guardado: <b>${U.fmt(saved)}</b></div></div>
       <div class="brow"><span>Depositar</span>${btn('dep', 100, '100', dob >= 100)}${btn('dep', 1000, '1.000', dob >= 1000)}${btn('dep', 'all', 'Todo', dob > 0)}</div>
       <div class="brow"><span>Retirar</span>${btn('wd', 100, '100', saved >= 100)}${btn('wd', 1000, '1.000', saved >= 1000)}${btn('wd', 'all', 'Todo', saved > 0)}</div>
@@ -316,6 +337,9 @@
         el.style.top = (PV.Input.my + 18) + 'px';
       }
       document.querySelectorAll('#buildbar button').forEach(b => b.classList.toggle('sel', b.dataset.b === PV.Island.sel));
+      const sc = PV.Island.sel && D.BUILD[PV.Island.sel].cat;
+      if (sc && sc !== UI.cat) UI.setCat(sc);
+      $('buildcats').style.bottom = (48 + $('buildbar').offsetHeight + 6) + 'px';
     }
 
     tick -= dt;
@@ -329,6 +353,9 @@
       if (p) $('prompt').innerHTML = p;
     }
     if (s !== 'menu') PV.Tutorial.update();
+    const rb = s === 'menu' ? '' : PV.Raid.banner();
+    $('raidBanner').classList.toggle('hidden', !rb);
+    if (rb) $('raidBanner').innerHTML = rb;
     if (UI.bankOpen()) { bankT -= 0.15; if (bankT <= 0) { bankT = 1; UI.renderBank(); } }
     if (UI.researchOpen()) { researchT -= 0.15; if (researchT <= 0) { researchT = 1; UI.renderResearch(); } }
     if (s === 'island') {
