@@ -34,13 +34,15 @@
     };
   }
 
-  PV.newGame = function (diff) {
+  PV.newGame = function (diff, tut) {
     PV.state = createState((Math.random() * 1e9) >>> 0, diff);
+    PV.state.tutOff = tut === false;
     PV.Tech.reset();
     PV.Island.ensureGrid(PV.state.islands[0]);
     PV.Sea.init();
     PV.setScene('sea');
     PV.Save.save();
+    if (tut !== false) return;
     PV.UI.toast('¡Bienvenido, capitán! Acercate a Isla Refugio y apretá F para desembarcar.', 'good');
     setTimeout(() => PV.UI.toast('Poné leñadores en los árboles y minas en las piedras, y trazá senderos hasta un almacén: tus porteadores llevan la carga.'), 4000);
     setTimeout(() => PV.UI.toast('Vendé en los puertos ⚓ y mejorá tu barco para llegar a islas más raras.'), 8000);

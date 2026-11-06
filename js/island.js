@@ -7,8 +7,9 @@
   const TAU = Math.PI * 2;
   const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]]; // este, sur, oeste, norte
   const BELT_SPEED = 1.9;  // casillas por segundo
-  const GAP = 0.34;
-  const INS_T = 0.7;       // segundos por viaje del estibador (sin investigación)        // separación mínima entre objetos en una cinta
+  const GAP = 0.34;        // separación mínima entre objetos en una cinta
+  const INS_BACK = 2;      // segundos que espera el estibador antes de devolver lo que no puede entregar
+  const INS_T = 0.7;       // segundos por viaje del estibador (sin investigación)
   const Isl = { cur: null, sel: null, dir: 0, cam: { x: 0, y: 0, z: 1 }, drag: null, pan: null, hover: null };
 
   // ---------- Grilla y ocupación ----------
@@ -193,6 +194,17 @@
     return null;
   }
 
+  // Devuelve un objeto a donde lo sacó el estibador (lo de atrás). El almacén y el muelle lo reciben aunque estén llenos, porque salió de ahí.
+  function giveBack(isl, b, src, item) {
+    if (!src || src === b) return false;
+    if (src.type === 'cinta') return beltInsert(src, item);
+    const kb = D.base(src.type);
+    if (kb === 'almacen') { PV.Inv.add(isl.storage, item, 1); return true; }
+    if (kb === 'muelle') { PV.Inv.add(src.store, item, 1); return true; }
+    if (src.out) { src.out.unshift(item); return true; }
+    return accept(isl, src, item);
+  }
+
   function pushOut(isl, b) {
     if (!b.out.length) return;
     const [fx, fy] = frontTile(b);
@@ -274,8 +286,17 @@
           b.prog = Math.min(1, b.prog + dt * PV.Tech.fx('ins') / INS_T);
           if (b.prog >= 1) {
             if (!b.handN) b.handN = 1; // partidas viejas
+            const before = b.handN;
             while (b.handN > 0 && give(isl, b, fx, fy, b.hand)) b.handN--;
-            if (!b.handN) { b.hand = null; b.prog = 0; }
+            b._w = b.handN < before ? 0 : (b._w || 0) + dt;
+            // Si lo de adelante no lo recibe por un rato, lo devuelve y busca otra cosa.
+            if (b.handN && b._w >= INS_BACK) {
+              const src = occAt(isl, b.x - dx, b.y - dy);
+              while (b.handN > 0 && giveBack(isl, b, src, b.hand)) b.handN--;
+              b._w = 0;
+              b._noBack = b.handN > 0;
+            }
+            if (!b.handN) { b.hand = null; b.prog = 0; b._noBack = false; }
           }
         }
         break;
@@ -368,7 +389,9 @@
         return { ic: '💤', lvl: 'wait', msg: 'Falta: ' + Object.keys(cost).filter(k => PV.Tech.need(k) > 0).map(k => D.RES[k].n).join(', ') + '.' };
       }
       case 'insertador':
-        return b.hand && b.prog >= 1 ? { ic: '🚧', lvl: 'stuck', msg: `No puede dejar ${D.RES[b.hand].n}: lo de adelante no lo recibe.` } : null;
+        if (!b.hand || b.prog < 1) return null;
+        return b._noBack ? { ic: '🚧', lvl: 'stuck', msg: `No puede entregar ni devolver ${D.RES[b.hand].n}: lo de adelante no lo recibe y lo de atrás está lleno.` }
+          : { ic: '🚧', lvl: 'stuck', msg: `No puede dejar ${D.RES[b.hand].n}: lo de adelante no lo recibe. Si sigue así, lo devuelve.` };
     }
     return null;
   }

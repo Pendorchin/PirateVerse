@@ -91,7 +91,10 @@ kbd {
 #quest .qhint { font-size: 12px; color: #6b5232; margin-top: 4px; font-style: italic; }
 #quest .qbar { height: 5px; background: rgba(90,58,30,.2); border-radius: 3px; margin-top: 8px; overflow: hidden; }
 #quest .qbar div { height: 100%; background: var(--gold); }
-#quest button { position: absolute; right: 6px; bottom: 6px; padding: 0 6px; font-size: 11px; box-shadow: none; }
+#quest { z-index: 30; }
+#quest .qbtns { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
+#quest .qbtns button { padding: 2px 8px; font-size: 12px; }
+#quest .qbtns button[data-act="hide"] { margin-left: auto; font-size: 11px; box-shadow: none; }
 
 /* Island */
 #islandPanel { position: fixed; left: 12px; top: 12px; width: 270px; padding: 10px 12px; max-height: calc(100vh - 140px); overflow: auto; }
@@ -231,3 +234,11 @@ img.shipart { width: 122px; image-rendering: pixelated; }
 #diffPick.hidden { display: none; }
 #diffPick button { display: flex; flex-direction: column; align-items: flex-start; text-align: left; padding: 8px 12px; }
 #diffPick button small { font-size: 12px; font-weight: normal; opacity: .85; margin-top: 2px; }
+
+/* ---------- Tutorial ---------- */
+#tutBtn { position: fixed; right: 12px; top: 194px; z-index: 30; padding: 4px 10px; font-size: 13px; }
+body:has(#islandPanel:not(.hidden)) #tutBtn { top: 12px; }
+#tutAsk { display: flex; flex-direction: column; gap: 6px; margin: 8px auto; max-width: 420px; }
+#tutAsk.hidden { display: none; }
+.tut-glow { position: relative; outline: 3px solid #ffd84a !important; outline-offset: 1px; animation: tutGlow 1s ease-in-out infinite; z-index: 2; }
+@keyframes tutGlow { 50% { box-shadow: 0 0 14px 4px rgba(255,216,74,.9); } }

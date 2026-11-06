@@ -15,6 +15,7 @@
   <div id="prompt" class="hidden"></div>
   <div id="help" class="hidden"></div>
   <div id="quest" class="panel hidden"></div>
+  <button id="tutBtn" class="hidden" title="Volver a mostrar el tutorial">🧔 Contramaestre</button>
 
   <div id="islandPanel" class="panel hidden">
     <div id="islandInfo"></div>
@@ -43,6 +44,11 @@
         <div class="sub">Elegí la dificultad (no se puede cambiar después):</div>
         <button data-diff="normal" class="primary"></button>
         <button data-diff="dificil"></button>
+      </div>
+      <div id="tutAsk" class="hidden">
+        <div class="sub">¿Querés que el contramaestre te enseñe a jugar?</div>
+        <button data-tut="1" class="primary">Sí, enseñame</button>
+        <button data-tut="0">No, ya sé jugar</button>
       </div>
       <button id="btnContinue">Continuar partida</button>
       <div class="controls">

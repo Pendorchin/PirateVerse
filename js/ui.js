@@ -24,7 +24,11 @@
     document.querySelectorAll('#diffPick button').forEach(b => {
       const d = D.DIFFS[b.dataset.diff];
       b.innerHTML = `<b>${d.n}</b><small>${d.desc}</small>`;
-      b.onclick = () => { $('diffPick').classList.add('hidden'); PV.newGame(b.dataset.diff); };
+      b.onclick = () => { $('diffPick').classList.add('hidden'); $('tutAsk').classList.remove('hidden'); $('tutAsk').dataset.diff = b.dataset.diff; };
+    });
+    document.querySelectorAll('#tutAsk button').forEach(b => b.onclick = () => {
+      $('tutAsk').classList.add('hidden');
+      PV.newGame($('tutAsk').dataset.diff, b.dataset.tut === '1');
     });
     $('btnContinue').onclick = () => PV.continueGame();
     $('btnContinue').disabled = !PV.Save.has();
@@ -116,7 +120,7 @@
     UI.closeBank();
     $('help').innerHTML = helpHtml(HELP[s] || []);
     $('quest').classList.toggle('island', s === 'island');
-    if (s === 'menu') show('quest', false);
+    if (s === 'menu') { show('quest', false); show('tutBtn', false); }
     if (s === 'menu') $('btnContinue').disabled = !PV.Save.has();
     tick = 1;
   };
