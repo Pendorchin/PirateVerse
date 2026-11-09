@@ -195,7 +195,7 @@
   //   strike: con la moral por debajo de esto, hay huelga.
   //   ship / merchant: lo que gasta por día tu tripulación y cada mercante por viaje.
   D.COLONY = {
-    day: 600, night: 150, fade: 25,
+    day: 450, night: 150, fade: 25,
     crew: { extractor: 2, lenadores: 2, aserradero: 2, fundicion: 2, herreria: 2, taller: 2, cartografo: 1, pesqueria: 1, canaveral: 2, cocina: 1, destileria: 2 },
     food: ['pesqueria', 'canaveral', 'cocina', 'destileria'],
     ronPer: 0.5, anejo: 0.1, // el ron añejo cuenta como ron y además sube la moral

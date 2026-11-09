@@ -7,7 +7,7 @@
       '🧭 El mar ahora tiene <b>5 zonas</b>, cada una con su color: Aguas Mansas, Mar de las Brumas, Costa de las Especias, Arrecifes de Coral y Mar de Ceniza.',
       '⚓ Hay <b>8 puertos</b> (antes 3). Cada zona vende lo suyo barato, paga bien lo que le falta y no compra algunas cosas: llevá mercancía de un mar a otro para ganar más.',
       '📦 Lo que vende un puerto se acaba y se repone de a poco. Raciones, ron y balas se consiguen en todos.',
-      '🌞 Los <b>días</b> duran más: 10 minutos (7½ de día y 2½ de noche).',
+      '🌞 Los <b>días</b> duran más: 5 minutos de día y 2½ de noche.',
       '🏴‍☠️ Los <b>asaltos</b> llegan una vez por semana, al amanecer de los días 8, 15, 22… (el reloj de arriba te dice cuándo). Ahora vienen con un barco más, más resistentes, saquean más rápido y se llevan un poco más. Y <b>cada asalto es más duro que el anterior</b>: +1 barco cada 2 asaltos, piratas de más nivel cada 3 y cascos más resistentes.',
       '🧠 Los barcos piratas son más <b>inteligentes</b>: rodean las islas, te encierran entre varios por los dos costados, apuntan adonde vas a estar y los guardianes muy golpeados huyen a repararse.',
       '🍲 La <b>cocina</b> ahora necesita leña para el fuego: 2 pescados + 1 madera = 4 raciones. Llevale madera por un sendero.',
