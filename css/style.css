@@ -311,3 +311,6 @@ table.market small.muted { font-size: 11px; }
 .cb-stop button:nth-child(2) { flex: 1; text-align: left; }
 .cb-warn { width: 100%; font-size: 11px; color: var(--bad); }
 .cb-buy { width: 100%; margin-top: 4px; }
+.dock-mode { display: flex; gap: 4px; margin: 4px 0; }
+.dock-mode button { flex: 1; padding: 4px; font-size: 13px; }
+.dock-mode button.on { background: var(--gold); font-weight: bold; }

@@ -186,7 +186,8 @@
         if (!dry) PV.Inv.add(b.inv, item, 1);
         return true;
       case 'muelle':
-        if (PV.Inv.sum(b.store) >= Isl.dockCap(b)) return false;
+        // El muelle de descarga no recibe de los senderos: ahí se deja lo que bajan los barcos.
+        if (Isl.unloadDock(b) || PV.Inv.sum(b.store) >= Isl.dockCap(b)) return false;
         if (!dry) PV.Inv.add(b.store, item, 1);
         return true;
     }
@@ -450,7 +451,9 @@
       case 'almacen':
         return PV.Inv.storageTotal(isl) >= PV.Inv.storageCap(isl) ? { ic: '⛔', lvl: 'dead', msg: 'Almacén lleno: cargá el barco o poné otro almacén.' } : null;
       case 'muelle':
-        return PV.Inv.sum(b.store) >= Isl.dockCap(b) ? { ic: '⛔', lvl: 'dead', msg: 'Muelle lleno: pasá con el barco o con un mercante.' } : null;
+        if (PV.Inv.sum(b.store) < Isl.dockCap(b)) return null;
+        return Isl.unloadDock(b) ? { ic: '⛔', lvl: 'dead', msg: 'Muelle de descarga lleno: sacá la carga con estibadores. Lo que bajen los barcos va al almacén.' }
+          : { ic: '⛔', lvl: 'dead', msg: 'Muelle lleno: pasá con el barco o con un mercante.' };
       case 'clasificador':
         return b.hold ? { ic: '🚧', lvl: 'stuck', msg: `No tiene por dónde mandar ${D.RES[b.hold].n}.` } : null;
       case 'repartidor':
@@ -522,11 +525,30 @@
 
   Isl.dockCap = b => Math.round(D.DOCK_CAP * PV.Tech.fx('store') * ((b && D.BUILD[b.type].capMul) || 1));
   Isl.docks = isl => isl.buildings.filter(b => D.base(b.type) === 'muelle');
+  // Muelle de carga (los barcos se llevan lo que traen los senderos) o de descarga (los barcos dejan la carga ahí).
+  Isl.unloadDock = b => b.mode === 'descargar';
+  Isl.loadDocks = isl => Isl.docks(isl).filter(d => !Isl.unloadDock(d));
 
-  // Pasa la carga de los muelles a una bodega (cargo) con lugar libre "room".
+  // Deja n de k en la isla: primero en los muelles de descarga y lo que no entra, en el almacén.
+  // Devuelve cuánto dejó (el almacén solo recibe hasta llenarse si limit es true).
+  Isl.dropAtIsland = function (isl, bag, k, n, limit) {
+    let left = Math.min(n, bag[k] || 0);
+    const start = left;
+    for (const d of Isl.docks(isl)) {
+      if (!Isl.unloadDock(d) || left <= 0) continue;
+      const m = Math.min(left, Isl.dockCap(d) - PV.Inv.sum(d.store));
+      if (m > 0) { PV.Inv.add(d.store, k, m); left -= m; }
+    }
+    const m = limit ? Math.min(left, Math.max(0, PV.Inv.storageCap(isl) - PV.Inv.storageTotal(isl))) : left;
+    if (m > 0) { PV.Inv.add(isl.storage, k, m); left -= m; }
+    PV.Inv.add(bag, k, -(start - left));
+    return start - left;
+  };
+
+  // Pasa la carga de los muelles de carga a una bodega (cargo) con lugar libre "room".
   Isl.takeFromDocks = function (isl, cargo, room) {
     let moved = 0;
-    for (const d of Isl.docks(isl)) {
+    for (const d of Isl.loadDocks(isl)) {
       for (const k of Object.keys(d.store)) {
         const n = Math.min(room - moved, d.store[k]);
         if (n <= 0) return moved;
@@ -551,13 +573,7 @@
     }
     const marks = new Set();
     for (const d of Isl.docks(isl)) for (const k of d.unload || []) marks.add(k);
-    let free = Inv.storageCap(isl) - Inv.storageTotal(isl);
-    for (const k of marks) {
-      const n = Math.min(free, S.ship.cargo[k] || 0);
-      if (n <= 0) continue;
-      Inv.add(S.ship.cargo, k, -n); Inv.add(isl.storage, k, n);
-      free -= n; unloaded += n;
-    }
+    for (const k of marks) if (S.ship.cargo[k]) unloaded += Isl.dropAtIsland(isl, S.ship.cargo, k, S.ship.cargo[k], true);
     return { loaded, unloaded };
   };
 
@@ -815,7 +831,8 @@
         if (inv.length) s += '<br>En la mesa: ' + inv.map(k => D.RES[k].n + ' ' + b.inv[k]).join(', ');
         s += '<br><i>Clic para abrir la investigación.</i>';
       } else if (kb === 'muelle') {
-        s += `Carga esperando: ${PV.Inv.sum(b.store)} / ${Isl.dockCap(b)}` + (b.unload.length ? `<br>Descarga del barco: ${b.unload.map(k => D.RES[k].n).join(', ')}` : '') + '<br><i>Clic para elegir qué descargar.</i>';
+        s += (Isl.unloadDock(b) ? '<b>📥 Muelle de descarga</b>: los barcos dejan acá lo que bajan. Sacalo con estibadores.<br>' : '<b>📤 Muelle de carga</b>: los barcos se llevan lo que traen los senderos.<br>')
+          + `${Isl.unloadDock(b) ? 'Carga descargada' : 'Carga esperando'}: ${PV.Inv.sum(b.store)} / ${Isl.dockCap(b)}` + (b.unload.length ? `<br>Descarga del barco: ${b.unload.map(k => D.RES[k].n).join(', ')}` : '') + '<br><i>Clic para cambiar de modo, elegir qué descargar y manejar balandras.</i>';
       }
       if (PV.Colony.isWorker(b)) s += `<br>👷 ${PV.Colony.crewOf(b)} trabajador${PV.Colony.crewOf(b) > 1 ? 'es' : ''}${PV.Colony.isNight() ? ' (en la taberna)' : ''}`;
       return s + '<br><span style="opacity:.7">R rotar · clic derecho quitar</span>';
@@ -932,6 +949,16 @@
   }
 
   const NO_ARROW = ['repartidor', 'taberna', 'almacen', 'muelle', 'cartografo', 'banco', 'bateria', 'empalizada', 'cuartel', 'torre_vigia'];
+  // Cartel del muelle: "Carga" (verde) o "Descarga" (azul).
+  function drawDockSign(ctx, b) {
+    const down = Isl.unloadDock(b), label = down ? '📥 Descarga' : '📤 Carga';
+    ctx.font = 'bold 10px Georgia';
+    const tw = ctx.measureText(label).width + 8, x = b.x * T + 2, y = b.y * T - 7;
+    ctx.fillStyle = down ? '#2471a3' : '#1e8449'; ctx.strokeStyle = '#3b2410'; ctx.lineWidth = 1;
+    rrect(ctx, x, y, tw, 13, 3); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.fillText(label, x + 4, y + 10);
+  }
+
   function drawMachine(ctx, b, isl, t) {
     const def = D.BUILD[b.type], px = b.x * T, py = b.y * T, w = def.w * T, h = def.h * T;
     if (def.of) return drawEvolved(ctx, b, isl, t, def);
@@ -1412,6 +1439,7 @@
     }
     Isl._night = PV.Colony.isNight();
     for (const b of isl.buildings) if (b.type !== 'cinta') drawMachine(ctx, b, isl, t);
+    for (const b of isl.buildings) if (D.base(b.type) === 'muelle') drawDockSign(ctx, b);
     Isl._night = false;
     drawCommute(ctx, isl, t);
     for (const b of isl.buildings) if (b._warn) drawWarn(ctx, b, t);

@@ -185,7 +185,7 @@
   function coastArrive(c, I) {
     const room = () => CB.cap - load(c);
     if (I.id === c.home) {
-      for (const k of Object.keys(c.in)) { PV.Inv.add(I.storage, k, c.in[k]); delete c.in[k]; }
+      for (const k of Object.keys(c.in)) { PV.Island.dropAtIsland(I, c.in, k, c.in[k]); }
       if (c.stops.some(s => s.mode === 'llevar' && islandOf(s.isl).owned)) PV.Island.takeFromDocks(I, c.out, room());
       // Provisiones de la tripulación, del almacén de su isla.
       const need = D.COLONY.merchant;
@@ -204,7 +204,7 @@
     const r = route(c), left = r.slice(c.leg % r.length).filter(id => { const s = stopOf(c, id); return s && s.mode === 'llevar'; }).length || 1;
     for (const k of Object.keys(c.out)) {
       const n = Math.ceil(c.out[k] / left);
-      PV.Inv.add(I.storage, k, n); PV.Inv.add(c.out, k, -n);
+      PV.Island.dropAtIsland(I, c.out, k, n);
     }
   }
 

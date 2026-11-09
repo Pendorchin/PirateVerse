@@ -167,7 +167,7 @@
       html: recipeOpts(b.type, b) }),
     destileria: b => ({ title: `${D.BUILD[b.type].icon} ${D.BUILD[b.type].n}: receta`, sub: 'La caña fina crece en islas ★★ y ★★★.',
       html: recipeOpts(b.type, b) }),
-    muelle: b => ({ title: '⚓ Muelle', top: coastHtml(), sub: '<b>Al llegar con tu barco, bajar…</b><br>' + 'Lo que marques se baja solo al almacén una vez, cuando llegás a la isla o desembarcás. Lo que cargues a mano después no se toca. (Lo que traen los senderos al muelle se sube solo al barco.)',
+    muelle: b => ({ title: '⚓ Muelle', top: dockModeHtml(b) + coastHtml(), sub: '<b>Al llegar con tu barco, bajar…</b><br>' + 'Lo que marques se baja solo al almacén una vez, cuando llegás a la isla o desembarcás. Lo que cargues a mano después no se toca. (Lo que traen los senderos al muelle se sube solo al barco.)',
       html: resOpts(k => b.unload.includes(k)), multi: true }),
   };
 
@@ -196,6 +196,14 @@
       <button data-v="cb:buy" class="primary cb-buy" ${can ? '' : 'disabled'}>Comprar balandra (${PV.Island.costTxt(C.cost)})</button></div>`;
   }
 
+  function dockModeHtml(b) {
+    const down = PV.Island.unloadDock(b);
+    return `<div class="cb"><div class="cb-title">Modo del muelle</div>
+      <div class="dock-mode"><button data-v="dm:cargar" class="${down ? '' : 'on'}">📤 Carga</button><button data-v="dm:descargar" class="${down ? 'on' : ''}">📥 Descarga</button></div>
+      <div class="sub">${down ? 'Lo que bajan los barcos (tu barco y las balandras) queda acá. Sacalo con estibadores hacia las fábricas. No recibe de los senderos.'
+        : 'Los senderos traen carga acá y los barcos (tu barco, mercantes y balandras) se la llevan.'}</div></div>`;
+  }
+
   function pickCoast(v) {
     const isl = PV.Island.cur, [, what, id, s] = v.split(':');
     if (what === 'buy') PV.Fleet.buyCoaster(isl);
@@ -211,6 +219,7 @@
     if (!b) return;
     if (v === '__close') return UI.closeChooser();
     if (v && v.startsWith('cb:')) return pickCoast(v);
+    if (v && v.startsWith('dm:')) { b.mode = v.slice(3); return renderChooser(); }
     if (D.base(b.type) === 'muelle') {
       const i = b.unload.indexOf(v);
       if (i >= 0) b.unload.splice(i, 1); else b.unload.push(v);
