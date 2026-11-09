@@ -124,11 +124,22 @@
 
   // ---------- Simulación ----------
 
-  function frontTile(b) {
+  // Casillas justo delante de la flecha. En los edificios de ancho par (2x2, 4x4) la flecha queda
+  // entre dos casillas, así que sirven las dos.
+  function frontTiles(b) {
     const def = D.BUILD[b.type], [dx, dy] = DIRS[b.dir];
-    if (def.w === 1) return [b.x + dx, b.y + dy];
+    if (def.w === 1) return [[b.x + dx, b.y + dy]];
     const half = (def.w - 1) / 2;
-    return [b.x + half + dx * (half + 1), b.y + half + dy * (half + 1)];
+    const fx = b.x + half + dx * (half + 1), fy = b.y + half + dy * (half + 1);
+    if (Number.isInteger(fx) && Number.isInteger(fy)) return [[fx, fy]];
+    // Del lado fraccionario, una casilla a cada costado del centro.
+    return Number.isInteger(fx) ? [[fx, Math.floor(fy)], [fx, Math.ceil(fy)]] : [[Math.floor(fx), fy], [Math.ceil(fx), fy]];
+  }
+  // La casilla de adelante que tiene algo (o la primera, si no hay nada).
+  function frontTile(b, isl) {
+    const list = frontTiles(b);
+    if (isl) for (const p of list) { const t = occAt(isl, p[0], p[1]); if (t && t !== b) return p; }
+    return list[0];
   }
 
   function beltInsert(belt, item, dry) {
@@ -216,8 +227,7 @@
 
   function pushOut(isl, b) {
     if (!b.out.length) return;
-    const [fx, fy] = frontTile(b);
-    if (give(isl, b, fx, fy, b.out[0])) b.out.shift();
+    for (const [fx, fy] of frontTiles(b)) if (give(isl, b, fx, fy, b.out[0])) { b.out.shift(); return; }
   }
 
   function updateBuilding(isl, b, dt) {
@@ -365,7 +375,7 @@
   // lvl: 'wait' = espera material, 'stuck' = no puede sacar lo que hizo, 'dead' = agotado / lleno.
 
   function outBlocked(isl, b) {
-    const [fx, fy] = frontTile(b), t = occAt(isl, fx, fy), it = D.RES[b.out[0]].n;
+    const [fx, fy] = frontTile(b, isl), t = occAt(isl, fx, fy), it = D.RES[b.out[0]].n;
     if (!t || t === b) return { ic: '➡️', lvl: 'stuck', msg: `No tiene adónde mandar ${it}: poné un sendero o un almacén donde apunta la flecha.` };
     if (t.type === 'cinta') return { ic: '🚧', lvl: 'stuck', msg: `El sendero de adelante está lleno: la carga no avanza.` };
     return { ic: '🚧', lvl: 'stuck', msg: `${D.BUILD[t.type].n} no recibe ${it} (está lleno o no lo usa).` };
