@@ -94,7 +94,7 @@
     canaveral:   { n: 'Cañaveral',  key: 'KeyU', k: 'U', icon: '🌾', w: 3, h: 3, cost: { doblones: 60 },
                    desc: 'Cultiva la caña silvestre y nunca se agota. No crece en Isla Refugio: la caña está en islas ★, y la caña fina (para ron añejo) en ★★ y ★★★.' },
     cocina:      { n: 'Cocina',     key: 'KeyO', k: 'O', icon: '🍲', w: 2, h: 2, cost: { doblones: 80, piedra: 10 },
-                   desc: 'Cocineros que convierten pescado en raciones.' },
+                   desc: 'Cocineros que convierten pescado en raciones. Necesitan leña para el fuego: 2 pescados + 1 madera = 4 raciones.' },
     destileria:  { n: 'Destilería', key: 'KeyL', k: 'L', icon: '🥃', w: 3, h: 3, cost: { doblones: 120, piedra: 15 },
                    desc: 'Alambiques que destilan la caña en ron, o la caña fina en ron añejo. Clic para elegir.' },
     taberna:     { n: 'Taberna',    key: 'KeyT', k: 'T', icon: '🍺', w: 3, h: 3, cost: { doblones: 120, piedra: 10 },
@@ -178,7 +178,8 @@
       bala_explosiva: { in: { balas: 2, polvora: 1 }, out: 'bala_explosiva', n: 2, t: 3 },
     },
   };
-  D.RECIPES.cocina = { raciones: { in: { pescado: 1 }, out: 'raciones', n: 2, t: 2 } };
+  // La cocina gasta leña para el fuego: 1 madera cada 2 pescados (la fundición gasta 1 por lingote).
+  D.RECIPES.cocina = { raciones: { in: { pescado: 2, madera: 1 }, out: 'raciones', n: 4, t: 4 } };
   D.RECIPES.destileria = {
     ron:       { in: { cana: 2 }, out: 'ron', n: 1, t: 3 },
     ron_anejo: { in: { cana_fina: 2 }, out: 'ron_anejo', n: 1, t: 4 },
