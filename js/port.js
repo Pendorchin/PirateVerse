@@ -172,6 +172,7 @@
     else if (a === 'up') upgrade(el.dataset.k);
     else if (a === 'dep') deliver(el.dataset.k);
     else if (a === 'buyship') PV.Fleet.buy(Port.isl);
+    else if (a === 'plan') PV.Fleet.buyPlan(el.dataset.k);
     else if (a === 'fhome' || a === 'fport') PV.Fleet.cycle(+el.dataset.i, a === 'fhome' ? 'home' : 'port');
     else if (a === 'repair') repair();
     Port.render();
@@ -227,7 +228,7 @@
         ${sc.next ? `<div class="arrow">→</div><div class="shipcard dim">${shipImg(sc.next)}<div><b>${sc.next.n}</b>
           <div class="sub">Faltan ${sc.next.min - sc.lv} mejoras</div></div></div>` : '<div class="sub">¡El barco más grande del archipiélago!</div>'}
       </div>`;
-    return hero + `<p class="muted">Los materiales se entregan de a poco: traelos en la bodega, tocá <b>Entregar</b> y quedan guardados en el astillero hasta completar la mejora.</p>` +
+    return plansHtml() + `<h3 style="margin:12px 0 4px">🔨 Tu barco</h3>` + hero + `<p class="muted">Los materiales se entregan de a poco: traelos en la bodega, tocá <b>Entregar</b> y quedan guardados en el astillero hasta completar la mejora.</p>` +
       Object.keys(D.UP).map(k => {
         const up = D.UP[k], lv = S.ship.up[k], cur = up.lv[lv], next = up.lv[lv + 1];
         const pips = up.lv.map((_, i) => `<i class="${i <= lv ? 'on' : ''}"></i>`).join('');
@@ -241,20 +242,35 @@
       }).join('');
   }
 
+  // Planos de barcos mejorados: se compran acá y se usan en el Astillero de tu isla.
+  function plansHtml() {
+    const F = PV.Fleet, S = PV.state;
+    const rows = Object.keys(D.PLANS).map(id => {
+      const P = D.PLANS[id], L = D.SHIP_LV[P.kind][P.lv], have = F.plans()[id], need = P.req && !F.plans()[P.req];
+      const btn = have ? '<b>✔ Ya lo tenés</b>'
+        : need ? '<span class="muted">Primero el nivel anterior</span>'
+        : `<button class="primary" data-act="plan" data-k="${id}" ${S.doblones >= P.p ? '' : 'disabled'}>Comprar (${U.fmt(P.p)} <i class="coin"></i>)</button>`;
+      return `<div class="upg"><div class="ic">📜</div><div><h4>Plano: ${D.SHIP_NAMES[P.kind]} ${F.roman(P.lv)}</h4>
+        <div class="sub">Carga ${L.cap} · velocidad ${Math.round(L.spd * 100)}% · se construye con ${PV.Island.costTxt(L.cost)}</div></div>${btn}</div>`;
+    }).join('');
+    return `<h3 style="margin:4px 0">📜 Planos de barcos</h3>
+      <p class="muted">Con el plano, el <b>Astillero</b> que construyas en tu isla (tecla <kbd>Y</kbd>) puede hacer ese barco o mejorar los que ya tenés.</p>${rows}`;
+  }
+
   function fleetHtml() {
     const L = PV.Fleet.list(), M = D.MERCHANT, isl = id => PV.state.islands[id];
     const rows = L.map((m, i) => `<div class="fleet"><img src="${PV.Spr.src('barco_mercante')}" alt="">
-      <div><h4 style="margin:0">${m.name} <small class="muted">· carga ${PV.Fleet.cap(m)} · velocidad ${Math.round(PV.Fleet.speedOf(m) / M.speed * 100)}%</small></h4><div class="sub">${isl(m.home).name} → ${isl(m.port).name} <span class="muted">(${Wd.zone(isl(m.port)).n})</span></div>
+      <div><h4 style="margin:0">${m.name} <small class="muted">· nivel ${PV.Fleet.roman(m.ml)} · carga ${PV.Fleet.cap(m)} · velocidad ${Math.round(PV.Fleet.speedOf(m) / M.speed * 100)}%</small></h4><div class="sub">${isl(m.home).name} → ${isl(m.port).name} <span class="muted">(${Wd.zone(isl(m.port)).n})</span></div>
         <div class="sub muted">Paga bien ${names(Wd.zone(isl(m.port)).wants)}${Wd.zone(isl(m.port)).refuses.length ? ' · no compra ' + names(Wd.zone(isl(m.port)).refuses) : ''}</div>
         <div class="sub">${PV.Fleet.status(m)} · ganó ${U.fmt(m.earned)} <i class="coin"></i></div></div>
       <div style="display:flex;flex-direction:column;gap:4px">
         <button data-act="fhome" data-i="${i}">Cambiar isla</button><button data-act="fport" data-i="${i}">Cambiar puerto</button></div></div>`).join('');
-    const full = L.length >= M.max, cost = PV.Fleet.nextCost(), nxt = { lvl: L.length };
+    const full = L.length >= M.max, cost = PV.Fleet.nextCost(1), nxt = { ml: 1 };
     const can = !full && PV.Inv.canPay(cost, null);
-    return `<p class="muted">Los mercantes cargan solos en el <b>muelle</b> de tu isla, navegan al puerto, venden todo y vuelven. Cada mercante nuevo cuesta más, pero carga más y navega más rápido.</p>
+    return `<p class="muted">Los mercantes cargan solos en el <b>muelle</b> de tu isla, navegan al puerto, venden todo y vuelven. Cada mercante extra cuesta más. Acá se compran de nivel I; los de nivel II y III se construyen en un <b>Astillero</b> de tu isla con el plano (pestaña 🔨 Astillero).</p>
       ${rows || '<p class="muted">Todavía no tenés mercantes.</p>'}
       <div class="fleet"><img src="${PV.Spr.src('barco_mercante')}" alt="" style="filter:grayscale(.6)">
-        <div><h4 style="margin:0">Comprar mercante</h4>
+        <div><h4 style="margin:0">Comprar mercante I</h4>
           <div class="sub">${full ? 'Ya tenés el máximo.' : `${PV.Inv.costHtml(cost, null)} · carga ${PV.Fleet.cap(nxt)} · velocidad ${Math.round(PV.Fleet.speedOf(nxt) / M.speed * 100)}%`} · ${L.length}/${M.max}</div></div>
         <button class="primary" data-act="buyship" ${can ? '' : 'disabled'}>Comprar</button></div>`;
   }

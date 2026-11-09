@@ -10,26 +10,79 @@
   const ports = () => PV.state.islands.filter(i => i.port);
 
   Fleet.list = () => PV.state.fleet || (PV.state.fleet = []);
-  // Cada mercante extra cuesta más pero viene mejor: m.lvl 0 es el primero (los de partidas viejas también).
-  Fleet.costFor = n => ({ doblones: [800, 1050, 1350, 1750, 2300][Math.min(n, 4)], tablones: 40 + 10 * n });
-  Fleet.nextCost = () => Fleet.costFor(Fleet.list().length);
-  Fleet.cap = m => D.MERCHANT.cap + 10 * ((m && m.lvl) || 0) + PV.Tech.fx('mCap');
-  Fleet.speedOf = m => D.MERCHANT.speed * (1 + 0.06 * ((m && m.lvl) || 0));
+  // ---------- Niveles de barco y planos ----------
+  // m.ml: nivel del barco (1, 2 o 3). Los planos del II y el III se compran en los puertos.
+  const LV = D.SHIP_LV, ROMAN = ['', 'I', 'II', 'III'];
+  Fleet.roman = lv => ROMAN[lv || 1];
+  Fleet.plans = () => PV.state.plans || (PV.state.plans = {});
+  Fleet.knows = (kind, lv) => lv <= 1 || !!Fleet.plans()[kind + lv];
+  Fleet.bestKnown = kind => (Fleet.knows(kind, 3) ? 3 : Fleet.knows(kind, 2) ? 2 : 1);
+  Fleet.buyPlan = function (id) {
+    const P = D.PLANS[id], S = PV.state;
+    if (!P || Fleet.plans()[id]) return;
+    if (P.req && !Fleet.plans()[P.req]) return PV.UI.toast('Primero comprá el plano del nivel anterior.', 'bad');
+    if (S.doblones < P.p) return PV.UI.toast('No te alcanzan los doblones.', 'bad');
+    S.doblones -= P.p;
+    Fleet.plans()[id] = true;
+    PV.UI.toast(`📜 ¡Compraste el plano de ${D.SHIP_NAMES[P.kind].toLowerCase()} nivel ${ROMAN[P.lv]}! Construilo o mejorá tus barcos en un Astillero de tu isla.`, 'good');
+  };
 
+  // Mercantes: cada uno extra cuesta más (MERCHANT_MORE); lo demás depende del nivel.
+  Fleet.costFor = (n, lv) => {
+    const c = Object.assign({}, LV.mercante[lv || 1].cost), k = D.MERCHANT_MORE[Math.min(n, D.MERCHANT_MORE.length - 1)];
+    c.doblones = Math.round(c.doblones * k / 50) * 50;
+    c.tablones += 10 * n;
+    return c;
+  };
+  Fleet.nextCost = lv => Fleet.costFor(Fleet.list().length, lv);
+  Fleet.cap = m => LV.mercante[(m && m.ml) || 1].cap + PV.Tech.fx('mCap');
+  Fleet.speedOf = m => D.MERCHANT.speed * LV.mercante[(m && m.ml) || 1].spd;
+
+  function newMerchant(home, port, lv, x, y) {
+    const S = PV.state, L = Fleet.list();
+    const m = { id: S.nextId++, name: NAMES[L.length % NAMES.length], home: home.id, port: port.id, ml: lv || 1,
+      x, y, a: 0, v: 0, st: 'toHome', cargo: {}, wait: 0, earned: 0 };
+    L.push(m);
+    return m;
+  }
+
+  // En el puerto se compran mercantes de nivel I, pagando con la bodega.
   Fleet.buy = function (port) {
-    const S = PV.state, L = Fleet.list(), M = D.MERCHANT;
+    const L = Fleet.list(), M = D.MERCHANT;
     if (L.length >= M.max) return PV.UI.toast(`Ya tenés ${M.max} mercantes, es el máximo.`, 'bad');
-    const cost = Fleet.nextCost(), lvl = L.length;
+    const cost = Fleet.nextCost(1);
     if (!PV.Inv.canPay(cost, null)) return PV.UI.toast('Te faltan doblones o tablones en la bodega.', 'bad');
     PV.Inv.pay(cost, null);
     // Arranca sirviendo a la isla con muelle más cercana a este puerto.
     const withDock = owned().filter(i => PV.Island.docks(i).length);
     const home = (withDock.length ? withDock : owned()).sort((a, b) => U.dist(a.x, a.y, port.x, port.y) - U.dist(b.x, b.y, port.x, port.y))[0];
-    L.push({
-      id: S.nextId++, name: NAMES[L.length % NAMES.length], home: home.id, port: port.id,
-      lvl, x: port.x + port.R + 120, y: port.y, a: 0, v: 0, st: 'toHome', cargo: {}, wait: 0, earned: 0,
-    });
-    PV.UI.toast(`¡Compraste ${L[L.length - 1].name}! Va a buscar carga a ${home.name}.`, 'good');
+    const m = newMerchant(home, port, 1, port.x + port.R + 120, port.y);
+    PV.UI.toast(`¡Compraste ${m.name}! Va a buscar carga a ${home.name}.`, 'good');
+  };
+
+  // En el astillero de tu isla: mercantes de cualquier nivel que conozcas, pagando con el almacén de la isla.
+  Fleet.buildMerchant = function (isl, lv) {
+    const L = Fleet.list(), M = D.MERCHANT;
+    if (!Fleet.knows('mercante', lv)) return PV.UI.toast('Te falta el plano: se compra en los puertos.', 'bad');
+    if (L.length >= M.max) return PV.UI.toast(`Ya tenés ${M.max} mercantes, es el máximo.`, 'bad');
+    const cost = Fleet.nextCost(lv);
+    if (!PV.Inv.canPay(cost, isl)) return PV.UI.toast('Te falta: ' + PV.Island.costTxt(cost), 'bad');
+    PV.Inv.pay(cost, isl);
+    const port = ports().sort((a, b) => U.dist(a.x, a.y, isl.x, isl.y) - U.dist(b.x, b.y, isl.x, isl.y))[0];
+    const m = newMerchant(isl, port, lv, isl.x + isl.R + 120, isl.y);
+    PV.UI.toast(`⛵ ¡Los carpinteros terminaron ${m.name} (mercante ${ROMAN[lv]})! Vende en ${port.name}.`, 'good');
+  };
+
+  // Mejorar un barco al nivel siguiente: cuesta lo mismo que uno nuevo de ese nivel (sin el recargo por cantidad).
+  Fleet.upgradeCost = (kind, b) => LV[kind][(b.ml || 1) + 1] && LV[kind][(b.ml || 1) + 1].cost;
+  Fleet.upgrade = function (isl, kind, b) {
+    const lv = (b.ml || 1) + 1, cost = Fleet.upgradeCost(kind, b);
+    if (!cost) return;
+    if (!Fleet.knows(kind, lv)) return PV.UI.toast('Te falta el plano: se compra en los puertos.', 'bad');
+    if (!PV.Inv.canPay(cost, isl)) return PV.UI.toast('Te falta: ' + PV.Island.costTxt(cost), 'bad');
+    PV.Inv.pay(cost, isl);
+    b.ml = lv;
+    PV.UI.toast(`🛠️ ${b.name} ahora es ${D.SHIP_NAMES[kind].toLowerCase()} nivel ${ROMAN[lv]}.`, 'good');
   };
 
   // Cambia la isla o el puerto de la ruta al siguiente disponible.
@@ -119,21 +172,26 @@
   Fleet.coastOf = isl => Fleet.coast().filter(c => c.home === isl.id);
   Fleet.coastMax = isl => PV.Island.docks(isl).length * CB.perDock;
   const load = c => PV.Inv.sum(c.in) + PV.Inv.sum(c.out);
+  Fleet.coastCap = c => LV.balandra[c.ml || 1].cap;
+  const ccap = Fleet.coastCap;
   // Ruta: su isla y después las paradas que siguen siendo tuyas.
   const route = c => [c.home].concat(c.stops.filter(s => islandOf(s.isl).owned).map(s => s.isl));
   const stopOf = (c, id) => c.stops.find(s => s.isl === id);
 
-  Fleet.buyCoaster = function (isl) {
+  Fleet.buyCoaster = function (isl, lv) {
+    lv = lv || 1;
+    const cost = LV.balandra[lv].cost;
+    if (!Fleet.knows('balandra', lv)) return PV.UI.toast('Te falta el plano: se compra en los puertos.', 'bad');
     const S = PV.state, mine = Fleet.coastOf(isl);
     if (!PV.Island.docks(isl).length) return PV.UI.toast('Primero construí un muelle en esta isla.', 'bad');
     if (mine.length >= Fleet.coastMax(isl)) return PV.UI.toast(`Cada muelle tiene lugar para ${CB.perDock} balandras. Construí otro muelle para tener más.`, 'bad');
-    if (!PV.Inv.canPay(CB.cost, isl)) return PV.UI.toast('Te falta: ' + PV.Island.costTxt(CB.cost), 'bad');
-    PV.Inv.pay(CB.cost, isl);
+    if (!PV.Inv.canPay(cost, isl)) return PV.UI.toast('Te falta: ' + PV.Island.costTxt(cost), 'bad');
+    PV.Inv.pay(cost, isl);
     const others = owned().filter(o => o.id !== isl.id);
     const c = {
       id: S.nextId++, name: CB_NAMES[Fleet.coast().length % CB_NAMES.length], home: isl.id,
       stops: others.length ? [{ isl: others[0].id, mode: 'traer' }] : [],
-      x: isl.x + isl.R + 100, y: isl.y + 40, a: 0, v: 0, leg: 0, st: 'sail', wait: 0, in: {}, out: {},
+      ml: lv, x: isl.x + isl.R + 100, y: isl.y + 40, a: 0, v: 0, leg: 0, st: 'sail', wait: 0, in: {}, out: {},
     };
     Fleet.coast().push(c);
     PV.UI.toast(`⛵ ¡Compraste la balandra ${c.name}! Elegí sus paradas en el muelle.`, 'good');
@@ -166,9 +224,9 @@
       // Se vende por la mitad; lo que lleva a bordo vuelve al almacén de su isla.
       const H = islandOf(c.home);
       for (const bag of [c.in, c.out]) for (const k in bag) PV.Inv.add(H.storage, k, bag[k]);
-      PV.state.doblones += Math.round(CB.cost.doblones / 2);
+      PV.state.doblones += Math.round(LV.balandra[c.ml || 1].cost.doblones / 2);
       PV.state.coast = Fleet.coast().filter(o => o !== c);
-      PV.UI.toast(`Vendiste la balandra ${c.name} por ${Math.round(CB.cost.doblones / 2)} doblones.`);
+      PV.UI.toast(`Vendiste la balandra ${c.name} por ${Math.round(LV.balandra[c.ml || 1].cost.doblones / 2)} doblones.`);
     }
     c.leg = 0; c.st = 'sail'; // vuelve a empezar la vuelta desde su isla
   };
@@ -177,13 +235,13 @@
     const r = route(c);
     if (r.length < 2) return 'Sin paradas: agregale una isla.';
     const at = islandOf(r[c.leg % r.length]), n = load(c);
-    if (c.st === 'stop') return `En ${at.name} (${n}/${CB.cap})`;
-    return `Rumbo a ${at.name} con ${n}/${CB.cap}${c.hungry ? ' · sin provisiones, va lento' : ''}`;
+    if (c.st === 'stop') return `En ${at.name} (${n}/${ccap(c)})`;
+    return `Rumbo a ${at.name} con ${n}/${ccap(c)}${c.hungry ? ' · sin provisiones, va lento' : ''}`;
   };
 
   // Lo que hace al llegar a cada isla.
   function coastArrive(c, I) {
-    const room = () => CB.cap - load(c);
+    const room = () => ccap(c) - load(c);
     if (I.id === c.home) {
       for (const k of Object.keys(c.in)) { PV.Island.dropAtIsland(I, c.in, k, c.in[k]); }
       if (c.stops.some(s => s.mode === 'llevar' && islandOf(s.isl).owned)) PV.Island.takeFromDocks(I, c.out, room());
@@ -214,7 +272,7 @@
       if (r.length < 2) { c.leg = 0; c.st = 'stop'; c.v = U.lerp(c.v, 0, Math.min(1, dt * 2)); continue; }
       const I = islandOf(r[c.leg % r.length]);
       if (c.st === 'sail') {
-        if (sail(c, I, dt, CB.speed * (c.hungry ? 0.7 : 1))) { c.st = 'stop'; c.wait = 0; coastArrive(c, I); }
+        if (sail(c, I, dt, CB.speed * LV.balandra[c.ml || 1].spd * (c.hungry ? 0.7 : 1))) { c.st = 'stop'; c.wait = 0; coastArrive(c, I); }
       } else {
         c.v = U.lerp(c.v, 0, Math.min(1, dt * 2));
         c.wait += dt;

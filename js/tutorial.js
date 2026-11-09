@@ -87,6 +87,7 @@
     // Edificios, la primera vez que los elegís para construir.
     'b:aserradero': { t: `${B('aserradero')}: corta madera y hace <b>tablones</b>.`, h: 'Llevale madera con un sendero que entre por cualquier lado, y sacá los tablones por la flecha. Los tablones se piden en casi todo.' },
     'b:fundicion': { t: `${B('fundicion')}: funde minerales y hace <b>lingotes</b>.`, h: 'Necesita mineral (cobre, hierro, estaño…) y <b>carbón</b> o madera para el fuego. Llevale las dos cosas por senderos.' },
+    'b:astillero': { t: `${B('astillero')}: carpinteros que hacen y mejoran barcos.`, h: 'Hacé clic para construir balandras y mercantes para esta isla, o mejorar los que tenés. Los de nivel II y III necesitan el plano, que se compra en los puertos (pestaña 🔨 Astillero).' },
     'b:repartidor': { t: `${B('repartidor')}: divide la carga de un sendero en 2.`, h: 'Lo que llega por atrás sale una vez a la izquierda y otra a la derecha. Poné un sendero a cada costado: sirve para repartir entre dos fábricas.' },
     'b:clasificador': { t: `${B('clasificador')}: separa la carga de un sendero.`, h: 'Hacé clic para elegir qué recurso sigue derecho; lo demás sale por los costados. Sirve para mandar cada cosa a su fábrica.' },
     'b:insertador': { t: `${B('insertador')}: agarra cosas de un lado y las deja del otro.`, h: 'Ponelo entre dos edificios (por ejemplo, almacén → fábrica). Con clic elegís qué agarra. Investigando camina más rápido y lleva más por viaje.' },

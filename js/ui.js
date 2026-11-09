@@ -167,6 +167,7 @@
       html: recipeOpts(b.type, b) }),
     destileria: b => ({ title: `${D.BUILD[b.type].icon} ${D.BUILD[b.type].n}: receta`, sub: 'La caña fina crece en islas ★★ y ★★★.',
       html: recipeOpts(b.type, b) }),
+    astillero: b => ({ title: '🛠️ Astillero', top: shipyardHtml(), sub: '', html: '', multi: true }),
     muelle: b => ({ title: '⚓ Muelle', top: dockModeHtml(b) + coastHtml(), sub: '<b>Al llegar con tu barco, bajar…</b><br>' + 'Lo que marques se baja solo al almacén una vez, cuando llegás a la isla o desembarcás. Lo que cargues a mano después no se toca. (Lo que traen los senderos al muelle se sube solo al barco.)',
       html: resOpts(k => b.unload.includes(k)), multi: true }),
   };
@@ -185,15 +186,57 @@
           <button data-v="cb:del:${c.id}:${i}" title="Quitar parada">✕</button>
           ${noDock ? '<div class="cb-warn">⚠ Esa isla no tiene muelle: no hay de dónde cargar.</div>' : ''}</div>`;
       }).join('');
-      return `<div class="cb-boat"><div class="cb-h"><b>⛵ ${c.name}</b> <button data-v="cb:sell:${c.id}" class="cb-sell" title="Vender por la mitad">Vender</button></div>
+      return `<div class="cb-boat"><div class="cb-h"><b>⛵ ${c.name}</b> <small>nivel ${F.roman(c.ml)} · carga ${F.coastCap(c)}</small> <button data-v="cb:sell:${c.id}" class="cb-sell" title="Vender por la mitad">Vender</button></div>
         <div class="cb-st">${F.coastStatus(c)}</div>${stops}
         ${c.stops.length < C.stops ? `<button data-v="cb:add:${c.id}" class="cb-add">+ Agregar parada</button>` : ''}</div>`;
     }).join('');
-    const n = F.coastOf(isl).length, max = F.coastMax(isl), can = n < max && PV.Inv.canPay(C.cost, isl);
+    const n = F.coastOf(isl).length, max = F.coastMax(isl), c1 = D.SHIP_LV.balandra[1].cost, can = n < max && PV.Inv.canPay(c1, isl);
     return `<div class="cb"><div class="cb-title">⛵ Balandras de ${isl.name} (${n}/${max})</div>
-      <div class="sub">Mueven carga entre tus islas. <b>Trae de</b>: carga lo que hay en el muelle de esa isla y lo deja acá. <b>Lleva a</b>: carga lo que hay en este muelle y lo deja en el almacén de esa isla. Carga ${C.cap}, hasta ${C.stops} paradas.</div>
+      <div class="sub">Mueven carga entre tus islas. <b>Trae de</b>: carga lo que hay en el muelle de esa isla y lo deja acá. <b>Lleva a</b>: carga lo que hay en este muelle y lo deja en el almacén de esa isla. Hasta ${C.stops} paradas. Las balandras de nivel II y III se hacen en un <b>Astillero</b>.</div>
       ${list}
-      <button data-v="cb:buy" class="primary cb-buy" ${can ? '' : 'disabled'}>Comprar balandra (${PV.Island.costTxt(C.cost)})</button></div>`;
+      <button data-v="cb:buy" class="primary cb-buy" ${can ? '' : 'disabled'}>Comprar balandra I (${PV.Island.costTxt(c1)})</button></div>`;
+  }
+
+  // Astillero de tu isla: construir balandras y mercantes del nivel que conozcas, y mejorar los que tenés.
+  function shipyardHtml() {
+    const isl = PV.Island.cur, F = PV.Fleet, LV = D.SHIP_LV;
+    if (!isl) return '';
+    const cost = c => PV.Island.costTxt(c);
+    const stat = (kind, lv) => `carga ${LV[kind][lv].cap} · velocidad ${Math.round(LV[kind][lv].spd * 100)}%`;
+    const build = kind => [1, 2, 3].map(lv => {
+      const known = F.knows(kind, lv);
+      const c = kind === 'mercante' ? F.nextCost(lv) : LV.balandra[lv].cost;
+      const full = kind === 'mercante' ? F.list().length >= D.MERCHANT.max : F.coastOf(isl).length >= F.coastMax(isl);
+      const ok = known && !full && PV.Inv.canPay(c, isl);
+      return `<div class="sy-row"><div><b>${D.SHIP_NAMES[kind]} ${F.roman(lv)}</b> <small>${stat(kind, lv)}</small><br>
+        <small class="${known ? '' : 'muted'}">${known ? cost(c) : '🔒 Falta el plano (se compra en los puertos, pestaña Astillero)'}</small></div>
+        <button data-v="sy:new:${kind}:${lv}" class="primary" ${ok ? '' : 'disabled'}>Construir</button></div>`;
+    }).join('');
+    const mine = F.coastOf(isl).map(b => ['balandra', b]).concat(F.list().filter(m => m.home === isl.id).map(m => ['mercante', m]));
+    const rows = mine.map(([kind, b]) => {
+      const nx = (b.ml || 1) + 1, c = F.upgradeCost(kind, b);
+      const btn = !c ? '<small class="muted">Nivel máximo</small>'
+        : !F.knows(kind, nx) ? `<small class="muted">🔒 Plano ${F.roman(nx)}</small>`
+        : `<button data-v="sy:up:${kind}:${b.id}" ${PV.Inv.canPay(c, isl) ? '' : 'disabled'} title="${cost(c)}">Mejorar a ${F.roman(nx)}</button>`;
+      return `<div class="sy-row"><div><b>${b.name}</b> <small>${D.SHIP_NAMES[kind].toLowerCase()} ${F.roman(b.ml)} · ${stat(kind, b.ml || 1)}</small>${c && F.knows(kind, nx) ? `<br><small>${cost(c)}</small>` : ''}</div>${btn}</div>`;
+    }).join('');
+    const balNote = PV.Island.docks(isl).length ? '' : '<div class="cb-warn">⚠ Las balandras necesitan un muelle en esta isla.</div>';
+    return `<div class="sub">Los materiales salen del almacén de ${isl.name} (y de tu bodega si estás acá). Los planos de nivel II y III se compran en los puertos.</div>
+      <div class="cb"><div class="cb-title">⛵ Balandras (${F.coastOf(isl).length}/${F.coastMax(isl)})</div>${balNote}${build('balandra')}</div>
+      <div class="cb"><div class="cb-title">🚢 Mercantes (${F.list().length}/${D.MERCHANT.max}) · cada uno extra cuesta más</div>${build('mercante')}</div>
+      <div class="cb"><div class="cb-title">🛠️ Mejorar barcos de esta isla</div>${rows || '<div class="sub">Todavía no tenés barcos de esta isla.</div>'}</div>`;
+  }
+
+  function pickShipyard(v) {
+    const isl = PV.Island.cur, F = PV.Fleet, [, what, kind, x] = v.split(':');
+    if (what === 'new') {
+      if (kind === 'mercante') F.buildMerchant(isl, +x);
+      else { const c = F.buyCoaster(isl, +x); if (c) PV.UI.toast('Elegí sus paradas haciendo clic en el muelle.'); }
+    } else if (what === 'up') {
+      const b = (kind === 'mercante' ? F.list() : F.coast()).find(o => o.id === +x);
+      if (b) F.upgrade(isl, kind, b);
+    }
+    renderChooser();
   }
 
   function dockModeHtml(b) {
@@ -222,6 +265,7 @@
     if (!b) return;
     if (v === '__close') return UI.closeChooser();
     if (v && v.startsWith('cb:')) return pickCoast(v);
+    if (v && v.startsWith('sy:')) return pickShipyard(v);
     if (v && v.startsWith('dm:')) { b.mode = v.slice(3); return renderChooser(); }
     if (v && v.startsWith('ds:')) { b.noSell = v === 'ds:no'; return renderChooser(); }
     if (D.base(b.type) === 'muelle') {

@@ -59,7 +59,7 @@
         if (digs(type, g.res[ty * g.w + tx])) res++;
       }
     }
-    if (D.base(type) === 'muelle' || type === 'bateria' || type === 'pesqueria') return touchesWater(isl, x, y, def);
+    if (D.base(type) === 'muelle' || type === 'bateria' || type === 'pesqueria' || type === 'astillero') return touchesWater(isl, x, y, def);
     return !isDigger(type) || res > 0;
   };
 
@@ -75,7 +75,7 @@
     if (lock) { if (!quiet) PV.UI.toast(`Primero investigá «${D.TECH[lock].n}» en un Cartógrafo (tecla I).`, 'bad'); return null; }
     if (!Isl.canPlace(isl, type, x, y)) {
       const kb = D.base(type);
-      if (!quiet) PV.UI.toast(kb === 'extractor' ? 'La mina tiene que ir sobre piedra o mineral.' : kb === 'lenadores' ? 'Los leñadores tienen que ir sobre árboles.' : kb === 'muelle' ? 'El muelle tiene que tocar el agua.' : kb === 'bateria' ? 'La batería tiene que ir en la costa.' : kb === 'pesqueria' ? 'La pesquería tiene que tocar el agua.' : kb === 'canaveral' ? 'El cañaveral tiene que ir sobre caña de azúcar silvestre (crece en otras islas, no en Isla Refugio).' : 'No se puede construir ahí.', 'bad');
+      if (!quiet) PV.UI.toast(kb === 'extractor' ? 'La mina tiene que ir sobre piedra o mineral.' : kb === 'lenadores' ? 'Los leñadores tienen que ir sobre árboles.' : kb === 'muelle' ? 'El muelle tiene que tocar el agua.' : kb === 'bateria' ? 'La batería tiene que ir en la costa.' : kb === 'pesqueria' ? 'La pesquería tiene que tocar el agua.' : kb === 'astillero' ? 'El astillero tiene que tocar el agua.' : kb === 'canaveral' ? 'El cañaveral tiene que ir sobre caña de azúcar silvestre (crece en otras islas, no en Isla Refugio).' : 'No se puede construir ahí.', 'bad');
       return null;
     }
     const cost = D.BUILD[type].cost;
@@ -832,6 +832,9 @@
         s += cur ? `Investigando: <b>${D.TECH[cur].n}</b> (${Math.round(PV.Tech.progress(cur) * 100)}%)` : 'Sin investigación elegida.';
         if (inv.length) s += '<br>En la mesa: ' + inv.map(k => D.RES[k].n + ' ' + b.inv[k]).join(', ');
         s += '<br><i>Clic para abrir la investigación.</i>';
+      } else if (kb === 'astillero') {
+        const F = PV.Fleet, n = F.coastOf(isl).length + F.list().filter(m => m.home === isl.id).length;
+        s += `Barcos de esta isla: ${n}<br>Planos: balandra ${F.roman(F.bestKnown('balandra'))} · mercante ${F.roman(F.bestKnown('mercante'))}<br><i>Clic para construir o mejorar barcos.</i>`;
       } else if (kb === 'muelle') {
         s += (Isl.unloadDock(b) ? '<b>📥 Muelle de descarga</b>: los barcos dejan acá lo que bajan. Sacalo con estibadores.<br>' : '<b>📤 Muelle de carga</b>: los barcos se llevan lo que traen los senderos.<br>')
           + `${Isl.unloadDock(b) ? 'Carga descargada' : 'Carga esperando'}: ${PV.Inv.sum(b.store)} / ${Isl.dockCap(b)}` + (b.unload.length ? `<br>Descarga del barco: ${b.unload.map(k => D.RES[k].n).join(', ')}` : '') + '<br><i>Clic para cambiar de modo, elegir qué descargar y manejar balandras.</i>';
@@ -950,7 +953,7 @@
     ctx.strokeStyle = line; ctx.lineWidth = 2; ctx.stroke();
   }
 
-  const NO_ARROW = ['repartidor', 'taberna', 'almacen', 'muelle', 'cartografo', 'banco', 'bateria', 'empalizada', 'cuartel', 'torre_vigia'];
+  const NO_ARROW = ['astillero', 'repartidor', 'taberna', 'almacen', 'muelle', 'cartografo', 'banco', 'bateria', 'empalizada', 'cuartel', 'torre_vigia'];
   // Cartel del muelle: "Carga" (verde) o "Descarga" (azul).
   function drawDockSign(ctx, b) {
     const down = Isl.unloadDock(b), label = down ? '📥 Descarga' : b.noSell ? '📤 Carga · no vende' : '📤 Carga';
@@ -1073,6 +1076,24 @@
       }
       drawWorker(ctx, cx - 12, cy + 18, -Math.PI / 2, '#7b3f2a', b.on ? busy : 0, 'martillo');
       drawWorker(ctx, cx + 12, cy - 18, Math.PI / 2, '#556b2f', b.on ? busy + 2 : 0, 'martillo');
+    } else if (b.type === 'astillero') {
+      // Grada de madera con el esqueleto de un barco a medio hacer, pila de tablones y el carpintero.
+      floor(ctx, px, py, w, h, '#a57b4a', '#5a3a1e');
+      ctx.strokeStyle = 'rgba(60,35,15,0.35)'; ctx.lineWidth = 1;
+      for (let i = 1; i < 6; i++) { ctx.beginPath(); ctx.moveTo(px + 2, py + i * h / 6); ctx.lineTo(px + w - 2, py + i * h / 6); ctx.stroke(); }
+      // Casco: quilla y cuadernas
+      ctx.strokeStyle = '#5a3a1e'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(px + 14, cy); ctx.lineTo(px + w - 14, cy); ctx.stroke();
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 6; i++) {
+        const x = px + 20 + i * (w - 40) / 5, r = 16 - Math.abs(i - 2.5) * 3;
+        ctx.beginPath(); ctx.arc(x, cy, r, Math.PI * 0.15, Math.PI * 0.85); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, cy, r, -Math.PI * 0.85, -Math.PI * 0.15); ctx.stroke();
+      }
+      // Pila de tablones
+      ctx.fillStyle = '#d2a066'; ctx.strokeStyle = '#7a5230'; ctx.lineWidth = 1;
+      for (let i = 0; i < 3; i++) { ctx.fillRect(px + 8, py + h - 14 - i * 4, 26, 3.5); ctx.strokeRect(px + 8, py + h - 14 - i * 4, 26, 3.5); }
+      drawPerson(ctx, px + w - 16, py + h - 16, -Math.PI * 0.75, '#7b241c', busy, '#3b2410');
     } else if (b.type === 'muelle') {
       // Tablas sobre pilotes y cajones apilados esperando el barco.
       ctx.fillStyle = '#9a6b3d'; ctx.fillRect(px + 1, py + 1, w - 2, h - 2);

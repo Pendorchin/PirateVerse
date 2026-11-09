@@ -73,15 +73,15 @@
                    desc: 'Divide la carga en 2 caminos: una a la izquierda y otra a la derecha, turnándose. Si un lado está lleno, manda todo al otro.' },
     insertador:  { n: 'Estibador',  key: 'Digit8', k: '8', icon: '💪', w: 1, h: 1, cost: { doblones: 25 },
                    desc: 'Agarra de atrás (almacén, sendero o taller) y lo deja adelante. Clic para filtrar.' },
-    herreria:    { n: 'Herrería',   key: 'Digit9', k: '9', icon: '⚒️', w: 3, h: 3, cost: { doblones: 200, piedra: 20, lingote_hierro: 5 },
+    herreria:    { n: 'Herrería',   key: 'Digit9', k: '9', icon: '⚒️', w: 3, h: 3, cost: { doblones: 200, piedra: 20, lingote_cobre: 10 },
                    desc: 'El herrero hace balas de cañón o placas de hierro. Clic para elegir receta.' },
-    taller:      { n: 'Taller',     key: 'Digit0', k: '0', icon: '🧵', w: 3, h: 3, cost: { doblones: 180, tablones: 20, piedra: 10 },
+    taller:      { n: 'Taller',     key: 'Digit0', k: '0', icon: '🧵', w: 3, h: 3, cost: { doblones: 180, tablones: 20, piedra: 10, lingote_cobre: 8 },
                    desc: 'Artesanos hacen bronce, lona, pólvora y balas explosivas. Clic para elegir receta.' },
     muelle:      { n: 'Muelle',     key: 'KeyM', k: 'M', icon: '⚓', w: 2, h: 2, cost: { doblones: 100, tablones: 15 },
                    desc: 'Va en la costa. Lo que le llega se carga solo al barco (o a tus mercantes) cuando pasan.' },
-    banco:       { n: 'Banquero',   key: 'KeyB', k: 'B', icon: '🏦', w: 2, h: 2, cost: { doblones: 300, tablones: 30, piedra: 30 },
+    banco:       { n: 'Banquero',   key: 'KeyB', k: 'B', icon: '🏦', w: 2, h: 2, cost: { doblones: 300, tablones: 30, piedra: 30, lingote_cobre: 10 },
                    desc: 'Guarda tus doblones: no se pierden si te hunden y dan interés. Clic para depositar, retirar o invertir.' },
-    bateria:     { n: 'Batería',    key: 'KeyG', k: 'G', icon: '💣', w: 2, h: 2, cost: { doblones: 200, piedra: 30, lingote_hierro: 10 },
+    bateria:     { n: 'Batería',    key: 'KeyG', k: 'G', icon: '💣', w: 2, h: 2, cost: { doblones: 200, piedra: 30, lingote_cobre: 10 },
                    desc: 'Cañones en la costa: le disparan a los piratas que atacan la isla. Mandale balas por senderos (las explosivas pegan más).' },
     empalizada:  { n: 'Empalizada', key: 'KeyH', k: 'H', icon: '🪵', w: 1, h: 1, cost: { doblones: 3, tablones: 2 },
                    desc: 'Muro de troncos. Cada tramo reduce lo que roban y protege los edificios (arrastrá para hacer muros).' },
@@ -101,6 +101,8 @@
                    desc: 'De noche tu gente viene a comer, tomar ron y descansar. Mandale raciones y ron por senderos.' },
     cartografo:  { n: 'Cartógrafo', key: 'KeyC', k: 'C', icon: '🗺️', w: 2, h: 2, cost: { doblones: 120, tablones: 20, piedra: 10 },
                    desc: 'Estudia materiales para investigar mejoras. Mandale lo que pide la investigación actual. Clic para elegir qué investigar.' },
+    astillero:   { n: 'Astillero',  key: 'KeyY', k: 'Y', icon: '🛠️', w: 3, h: 3, cost: { doblones: 300, tablones: 60, piedra: 20, lingote_cobre: 15 },
+                   desc: 'Carpinteros de ribera: construyen balandras y mercantes para esta isla y mejoran los que ya tenés. Tiene que tocar el agua. Clic para abrirlo.' },
   };
 
   D.EXTRACT_RATE = 0.5;   // objetos por segundo
@@ -120,11 +122,11 @@
                       desc: 'Rueda de agua: corta más rápido y saca 3 tablones por madera.' },
     gran_herreria:  { of: 'herreria',    n: 'Gran herrería',        icon: '⚒️', w: 4, h: 4, spd: 2,   cost: { doblones: 800, piedra: 40, acero: 10 },
                       desc: 'Trabaja el doble y puede fundir cañones de bronce.' },
-    gran_taller:    { of: 'taller',      n: 'Gran taller',          icon: '🧵', w: 4, h: 4, spd: 2,   cost: { doblones: 700, tablones: 60, bronce: 15 },
+    gran_taller:    { of: 'taller',      n: 'Gran taller',          icon: '🧵', w: 4, h: 4, spd: 2,   cost: { doblones: 700, tablones: 60, lingote_hierro: 20 },
                       desc: 'Trabaja el doble y cose velamen para barcos.' },
-    deposito:       { of: 'almacen',     n: 'Depósito',             icon: '🏚️', w: 3, h: 3, slots: 4, cost: { doblones: 300, tablones: 60, piedra: 40 },
+    deposito:       { of: 'almacen',     n: 'Depósito',             icon: '🏚️', w: 3, h: 3, slots: 4, cost: { doblones: 300, tablones: 60, piedra: 40, lingote_cobre: 10 },
                       desc: 'Guarda como 4 almacenes en el espacio de 2.' },
-    puerto_propio:  { of: 'muelle',      n: 'Puerto propio',        icon: '⚓', w: 3, h: 3, capMul: 3, cost: { doblones: 500, tablones: 80, lingote_hierro: 15 },
+    puerto_propio:  { of: 'muelle',      n: 'Puerto propio',        icon: '⚓', w: 3, h: 3, capMul: 3, cost: { doblones: 500, tablones: 80, lingote_cobre: 20 },
                       desc: 'Muelle grande (3 veces más carga). Además repara tu barco gratis cuando llegás.' },
     academia:       { of: 'cartografo',  n: 'Academia',             icon: '🧭', w: 3, h: 3, spd: 3,   cost: { doblones: 500, tablones: 50, lingote_plata: 5 },
                       desc: 'Muchos cartógrafos juntos: investiga 3 veces más rápido.' },
@@ -138,7 +140,7 @@
     { k: 'rec', n: 'Recursos', icon: '⛏️', list: ['lenadores', 'extractor', 'cinta', 'almacen'] },
     { k: 'food', n: 'Comida y ron', icon: '🍺', list: ['pesqueria', 'canaveral', 'cocina', 'destileria', 'taberna'] },
     { k: 'fab', n: 'Fábricas', icon: '🔥', list: ['aserradero', 'fundicion', 'herreria', 'taller'] },
-    { k: 'log', n: 'Logística', icon: '💪', list: ['clasificador', 'repartidor', 'insertador', 'muelle'] },
+    { k: 'log', n: 'Logística', icon: '💪', list: ['clasificador', 'repartidor', 'insertador', 'muelle', 'astillero'] },
     { k: 'eco', n: 'Investigación y banca', icon: '🗺️', list: ['cartografo', 'banco'] },
     { k: 'def', n: 'Defensa', icon: '🛡️', list: ['bateria', 'empalizada', 'cuartel', 'torre_vigia'] },
   ];
@@ -289,6 +291,27 @@
   // Balandra de cabotaje: se compra en el muelle de una isla tuya y mueve carga entre tus islas.
   // Hasta 2 paradas; en cada una trae carga a su isla o lleva carga desde su isla.
   D.COASTER = { cost: { doblones: 400, tablones: 30 }, cap: 40, speed: 144, perDock: 2, stops: 2, wait: 4 };
+  // Barcos por nivel: el I lo sabés hacer; los planos del II y el III se compran en los puertos.
+  // El nivel II usa cobre y el III hierro, como los edificios. spd: velocidad respecto del nivel I.
+  D.SHIP_LV = {
+    balandra: [null,
+      { cap: 40, spd: 1, cost: { doblones: 400, tablones: 30 } },
+      { cap: 60, spd: 1.1, cost: { doblones: 600, tablones: 40, lingote_cobre: 10, lona: 10 } },
+      { cap: 80, spd: 1.2, cost: { doblones: 900, tablones: 50, lingote_hierro: 15, velamen: 5 } }],
+    mercante: [null,
+      { cap: 60, spd: 1, cost: { doblones: 800, tablones: 40 } },
+      { cap: 90, spd: 1.1, cost: { doblones: 1200, tablones: 60, lingote_cobre: 15, lona: 15 } },
+      { cap: 120, spd: 1.2, cost: { doblones: 1800, tablones: 80, lingote_hierro: 20, velamen: 10 } }],
+  };
+  D.SHIP_NAMES = { balandra: 'Balandra', mercante: 'Mercante' };
+  D.PLANS = {
+    balandra2: { kind: 'balandra', lv: 2, p: 1500 },
+    balandra3: { kind: 'balandra', lv: 3, p: 4000, req: 'balandra2' },
+    mercante2: { kind: 'mercante', lv: 2, p: 2500 },
+    mercante3: { kind: 'mercante', lv: 3, p: 6000, req: 'mercante2' },
+  };
+  // Cada mercante extra cuesta más (multiplica los doblones y suma tablones).
+  D.MERCHANT_MORE = [1, 1.3, 1.7, 2.2, 2.9];
 
   // Mejoras del barco. lv[0] es el barco inicial.
   D.UP = {

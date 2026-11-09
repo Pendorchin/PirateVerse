@@ -314,3 +314,9 @@ table.market small.muted { font-size: 11px; }
 .dock-mode { display: flex; gap: 4px; margin: 4px 0; }
 .dock-mode button { flex: 1; padding: 4px; font-size: 13px; }
 .dock-mode button.on { background: var(--gold); font-weight: bold; }
+
+/* Astillero */
+.sy-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 5px 0; border-top: 1px dashed rgba(90,58,30,.2); }
+.sy-row:first-of-type { border-top: 0; }
+.sy-row small { font-size: 11px; }
+.sy-row button { padding: 3px 9px; font-size: 12px; white-space: nowrap; }
