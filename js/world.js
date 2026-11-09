@@ -23,6 +23,26 @@
     return [isl.x + (tx - 24) * s * 0.72, isl.y + (ty - 18) * s];
   };
 
+  // Cada isla recibe RES_PER recursos de los de su nivel, distintos entre islas. Se reparten como cartas
+  // de un mazo mezclado, así cada recurso del nivel aparece en al menos una isla del mundo.
+  const RES_PER = 3;
+  function dealResources(r, islands) {
+    for (let t = 1; t < D.TIERS.length; t++) {
+      const list = U.shuffle(r, islands.filter(i => i.tier === t && !i.home && !i.port));
+      const pool = D.TIERS[t].res;
+      let deck = [];
+      for (const isl of list) {
+        isl.res = [];
+        let guard = 0;
+        while (isl.res.length < Math.min(RES_PER, pool.length) && guard++ < 50) {
+          if (!deck.length) deck = U.shuffle(r, pool.slice());
+          const k = deck.shift();
+          if (isl.res.includes(k)) deck.push(k); else isl.res.push(k);
+        }
+      }
+    }
+  }
+
   W.generate = function (seed) {
     const r = U.rng(seed);
     const C = W.SIZE / 2;
@@ -90,6 +110,7 @@
       const pre = D.ISLAND_PRE[Math.floor(r() * D.ISLAND_PRE.length)];
       add({ x: s.x, y: s.y, R: s.R + tier * 8, tier, name: pre + ' ' + names[ni++ % names.length] });
     });
+    dealResources(r, islands);
     return islands;
   };
 
@@ -108,7 +129,8 @@
       }
     }
 
-    const list = isl.home ? ['madera', 'piedra', 'cobre', 'madera', 'piedra', 'cobre'] : D.TIERS[isl.tier].res.slice();
+    const list = isl.home ? ['madera', 'piedra', 'cobre', 'madera', 'piedra', 'cobre'] : (isl.res || D.TIERS[isl.tier].res).slice();
+    if (isl.res) list.push(...isl.res.slice(0, 2)); // menos tipos, pero más vetas de cada uno
     if (!isl.home) list.push(list[0]);
     const mult = 1 + (isl.tier - 1) * 0.25;
 

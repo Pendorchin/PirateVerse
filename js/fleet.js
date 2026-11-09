@@ -44,6 +44,17 @@
     return `Rumbo a ${P.name} con ${n} de carga`;
   };
 
+  // Antes de zarpar, la tripulación del mercante carga raciones y ron de la isla.
+  function provision(m, H) {
+    const need = D.COLONY.merchant;
+    m.owe = {};
+    for (const k in need) {
+      const got = Math.min(need[k], H.storage[k] || 0);
+      PV.Inv.add(H.storage, k, -got);
+      if (got < need[k]) m.owe[k] = need[k] - got;
+    }
+  }
+
   function sail(m, target, dt) {
     let want = Math.atan2(target.y - m.y, target.x - m.x);
     // Esquiva las islas que tiene adelante.
@@ -72,10 +83,15 @@
         m.wait += dt;
         PV.Island.takeFromDocks(H, m.cargo, Fleet.cap() - PV.Inv.sum(m.cargo));
         const n = PV.Inv.sum(m.cargo);
-        if (n >= Fleet.cap() || (n > 0 && m.wait > 25)) m.st = 'toPort';
+        if (n >= Fleet.cap() || (n > 0 && m.wait > 25)) { provision(m, H); m.st = 'toPort'; }
       } else if (m.st === 'toPort') {
         if (sail(m, P, dt)) {
-          const got = PV.Port.sellAll(P, m.cargo);
+          let got = PV.Port.sellAll(P, m.cargo);
+          // Lo que no consiguió de provisiones en la isla lo compra en el puerto.
+          let paid = 0;
+          for (const k in m.owe || {}) paid += m.owe[k] * PV.Port.buyPrice(P, k);
+          m.owe = null;
+          if (paid) { got = Math.max(0, got - paid); PV.UI.toast(`⛵ ${m.name} compró raciones y ron en ${P.name} (${paid} doblones): tu isla no tenía.`, 'bad'); }
           m.earned += got;
           PV.state.doblones += got;
           if (got) PV.UI.toast(`⛵ ${m.name} vendió su carga en ${P.name} por ${got} doblones.`, 'good');

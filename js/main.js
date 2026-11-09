@@ -37,6 +37,7 @@
   PV.newGame = function (diff, tut) {
     PV.state = createState((Math.random() * 1e9) >>> 0, diff);
     PV.state.tutOff = tut === false;
+    PV.Colony.startStock(PV.state);
     PV.Tech.reset();
     PV.Island.ensureGrid(PV.state.islands[0]);
     PV.Sea.init();
@@ -98,6 +99,7 @@
       PV.Port.update(dt);
       PV.Fleet.update(dt);
       PV.Bank.update(dt);
+      PV.Colony.update(dt);
       PV.Raid.update(dt);
       if (PV.scene === 'sea') PV.Sea.update(dt);
       if (PV.scene === 'island') { PV.Island.update(dt); PV.Island.render(ctx); }

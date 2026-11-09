@@ -13,7 +13,7 @@
       cap: D.UP.bodega.lv[up.bodega].v,
       maxHp: D.UP.casco.lv[up.casco].v,
       guns: c.v, dmg: c.dmg,
-      speed: D.UP.velas.lv[up.velas].v,
+      speed: D.UP.velas.lv[up.velas].v * PV.Colony.shipMul(), // con hambre o sin ánimo la tripulación rema peor
       reload: 2.2,
     };
   };
@@ -63,7 +63,7 @@
   Sea.towersAlive = isl => isl.towers.filter(t => t.hp > 0).length;
   Sea.guardsAlive = isl => Sea.enemies.filter(e => e.home === isl.id).length;
   Sea.conquerCost = isl => 60 + (isl.tier - 1) * 150;
-  Sea.islandRes = isl => (isl.home ? ['madera', 'piedra', 'cobre'] : D.TIERS[isl.tier].res);
+  Sea.islandRes = isl => (isl.home ? ['madera', 'piedra', 'cobre'] : isl.res || D.TIERS[isl.tier].res);
 
   // ---------- Física ----------
 
@@ -782,6 +782,14 @@
     drawFog(ctx, x0, y0, x1, y1);
     for (const isl of vis) drawIslandLabel(ctx, isl);
     ctx.restore();
+
+    // Noche: se ven las luces de tus islas, los puertos y los faroles de los barcos.
+    const toScr = (wx, wy, r) => [(wx - camx) * z + W / 2, (wy - camy) * z + H / 2, r * z];
+    const lights = [];
+    for (const isl of vis) if (isl.owned || isl.port) lights.push(toScr(isl.x, isl.y, isl.R * (isl.port ? 1.6 : 1.3)));
+    if (!(sh.sunk > 0)) lights.push(toScr(sh.x, sh.y, 110));
+    for (const m of PV.Fleet.list()) lights.push(toScr(m.x, m.y, 60));
+    PV.Colony.drawNight(ctx, lights);
 
     drawMinimap(ctx);
   };

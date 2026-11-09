@@ -242,3 +242,13 @@ body:has(#islandPanel:not(.hidden)) #tutBtn { top: 12px; }
 #tutAsk.hidden { display: none; }
 .tut-glow { position: relative; outline: 3px solid #ffd84a !important; outline-offset: 1px; animation: tutGlow 1s ease-in-out infinite; z-index: 2; }
 @keyframes tutGlow { 50% { box-shadow: 0 0 14px 4px rgba(255,216,74,.9); } }
+
+/* ---------- Día y noche ---------- */
+#clock { position: fixed; left: 50%; top: 10px; transform: translateX(-50%); z-index: 19; padding: 3px 12px; border-radius: 12px;
+  background: rgba(242,228,196,.92); color: #3b2410; font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+#clock.night { background: rgba(20,28,60,.9); color: #f5e6b8; }
+#toasts { top: 44px !important; }
+#raidBanner { top: 40px; }
+body:has(#raidBanner:not(.hidden)) #toasts { top: 88px !important; }
+.lbl.colony { font-size: 12px; line-height: 1.45; }
+.lbl.warn { color: #c0392b; }

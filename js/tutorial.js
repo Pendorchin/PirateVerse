@@ -57,6 +57,14 @@
       h: 'Cada mejora pide doblones y materiales (por ej. tablones del aserradero). Si no te entran en la bodega, usá <b>Entregar</b> y traelos en varios viajes.',
       hl: () => PV.scene === 'port' ? ['#portPanel button[data-tab="astillero"]', '#portPanel button[data-act="dep"]:not([disabled])', '#portPanel button[data-act="up"]:not([disabled])'] : [],
       done: S => Object.values(S.ship.up).some(v => v > 0) },
+    { t: 'Tu gente necesita <b>comida</b>: poné una <b>Pesquería</b> en la costa y una <b>Cocina</b>.',
+      h: 'La pesquería (tecla <kbd>P</kbd>) va pegada al agua y saca pescado. La cocina (<kbd>O</kbd>) lo convierte en raciones. Uní la pesquería con la cocina con un sendero, y la cocina con el almacén.',
+      onIsl: true, hl: () => bar('pesqueria', 'cocina'),
+      done: S => anyB(S, 'pesqueria') && anyB(S, 'cocina') },
+    { t: 'Construí una <b>Taberna</b>.',
+      h: 'Tecla <kbd>T</kbd>. De noche tu gente viene a comer y tomar ron. Mandale raciones y ron por senderos (si no, comen del almacén). Cada taberna tiene 20 lugares: sin lugar descansan mal y rinden menos.',
+      onIsl: true, hl: () => bar('taberna'),
+      done: S => anyB(S, 'taberna') },
     { t: 'Construí un <b>Cartógrafo</b> para empezar a investigar.',
       h: 'Pestaña «Investigación y banca» o tecla <kbd>C</kbd>. Investigando desbloqueás edificios nuevos y mejorás todo.',
       onIsl: true, hl: () => bar('cartografo'),
@@ -64,9 +72,13 @@
     { t: 'Destruí una <b>torre enemiga</b>.',
       h: 'Las islas ★★ tienen torres. Ponete de costado y dispará con <kbd>Q</kbd> (babor) y <kbd>E</kbd> (estribor).',
       done: S => (S.towersKilled || 0) > 0 },
-    { t: '¡Bien ahí! Ahora <b>conquistá una isla nueva</b>.',
-      h: 'Sin torres ni barcos guardianes, acercate y fundá tu fuerte con <kbd>F</kbd>.',
+    { t: '¡Bien ahí! Ahora <b>conquistá una isla nueva</b>, mejor si tiene <b>caña de azúcar</b>.',
+      h: 'La caña no crece en Isla Refugio. Las islas comunes (★) cercanas suelen tener caña y no tienen torres: acercate y fundá tu fuerte con <kbd>F</kbd>. Hasta entonces, comprá ron en los puertos.',
       done: S => owned(S).length > 1 },
+    { t: 'Hacé tu propio <b>ron</b>: poné un <b>Cañaveral</b> sobre la caña y una <b>Destilería</b>.',
+      h: 'El cañaveral (<kbd>U</kbd>) cultiva la caña y nunca se agota. La destilería (<kbd>L</kbd>) hace ron. En islas ★★ y ★★★ hay caña fina: con ella se hace <b>ron añejo</b>, que vale mucho más y sube más la moral. Después llevá el ron a tus otras islas.',
+      onIsl: true, hl: () => bar('canaveral', 'destileria'),
+      done: S => anyB(S, 'canaveral') && anyB(S, 'destileria') },
   ];
 
   // ---------- Explicaciones de una sola vez ----------
@@ -80,6 +92,11 @@
     'b:herreria': { t: `${B('herreria')}: hace <b>balas</b> y <b>placas de hierro</b>.`, h: 'Hacé clic sobre ella para elegir la receta. Las balas sirven para tus cañones y para las baterías.' },
     'b:taller': { t: `${B('taller')}: hace <b>bronce</b>, <b>lona</b> y, con investigación, pólvora y balas explosivas.`, h: 'Hacé clic sobre él para elegir la receta.' },
     'b:muelle': { t: `${B('muelle')}: carga solo al barco.`, h: 'Va pegado al agua. Lo que le llega por senderos se sube solo al barco o a tus mercantes cuando pasan. Con clic elegís qué bajar al llegar.' },
+    'b:pesqueria': { t: `${B('pesqueria')}: pescadores que sacan pescado del mar.`, h: 'Tiene que tocar el agua. El pescado va a la Cocina, que hace las raciones.' },
+    'b:canaveral': { t: `${B('canaveral')}: cultiva caña de azúcar.`, h: 'Va sobre caña silvestre y nunca se agota. La caña común crece en islas ★; la caña fina, en ★★ y ★★★. No hay en Isla Refugio.' },
+    'b:cocina': { t: `${B('cocina')}: convierte pescado en raciones.`, h: '1 pescado = 2 raciones. Mandá las raciones a la taberna o al almacén.' },
+    'b:destileria': { t: `${B('destileria')}: destila la caña en ron.`, h: '2 cañas = 1 ron. Con caña fina hace <b>ron añejo</b> (clic para elegir la receta): vale casi el triple y sube más la moral.' },
+    'b:taberna': { t: `${B('taberna')}: donde tu gente come, toma y descansa de noche.`, h: 'Guarda hasta 40 raciones y 40 de ron, y tiene 20 lugares. Si no alcanza, comen de lo que haya en el almacén.' },
     'b:cartografo': { t: `${B('cartografo')}: investiga mejoras.`, h: 'Hacé clic sobre él (o tecla <kbd>I</kbd>) para elegir qué investigar. Después mandale por senderos o estibadores los materiales que pide.' },
     'b:banco': { t: `${B('banco')}: guarda tus doblones.`, h: 'Lo que guardás no se pierde si te hunden y da interés cada minuto. Ojo: si los piratas saquean la isla, se llevan una parte.' },
     'b:bateria': { t: `${B('bateria')}: cañones en la costa.`, h: 'Tiene que tocar el agua. Le dispara sola a los piratas que atacan la isla, pero necesita <b>balas</b>: mandáselas con un sendero (las explosivas pegan más).' },
@@ -88,6 +105,14 @@
     'b:torre_vigia': { t: `${B('torre_vigia')}: ve a los piratas desde lejos.`, h: 'Te avisa un minuto antes de un asalto y marca a los atacantes en rojo en el minimapa.' },
 
     // Momentos del juego.
+    night: { t: '🌙 <b>Cayó la noche.</b> Tu gente dejó de trabajar y fue a la taberna a comer y tomar ron.',
+      h: 'Cada trabajador come 1 ración y toma medio ron por noche. Si falta comida, al otro día trabajan más lento; si falta ron, baja la moral. Mirá el panel de la isla.' },
+    hungry: { t: '🍖 <b>Faltó comida</b> en una de tus islas: hoy trabajan más lento.',
+      h: 'Poné una Pesquería y una Cocina, o llevá raciones en el barco y bajalas al almacén.' },
+    strike: { t: '✊ <b>¡Huelga!</b> Sin ron, la moral se fue al piso y solo trabajan los que hacen comida.',
+      h: 'Llevá ron a la isla en el barco (se compra en los puertos o se hace en otra isla con caña). Con unas noches de ron se termina la huelga.' },
+    crew: { t: '🧑‍✈️ Tu <b>tripulación</b> también come y toma ron.',
+      h: 'Cada día gasta 2 raciones y 1 ron de la bodega. Sin raciones el barco va más lento; sin ron baja la moral y puede haber <b>motín</b>. En los puertos se compran.' },
     research: { t: '🗺️ <b>Investigación</b>: elegí una mejora y mandale al Cartógrafo los materiales que pide.',
       h: 'Hay cinco líneas: Logística, Producción, Desbloqueos, Navegación y Evoluciones (edificios más grandes). Cuando una termina, elegí la siguiente.' },
     bank: { t: '🏦 <b>Banquero</b>: depositá, retirá o invertí.',
@@ -156,6 +181,10 @@
     if (PV.Raid.st().cur) { want('raid'); if (S.diff === 'dificil') want('raidHard'); }
     if (owned(S).some(i => i.buildings.some(b => b.broken))) want('broken');
     if (owned(S).length > 1) want('colony');
+    if (PV.Colony.isNight()) want('night');
+    if (owned(S).some(i => i.col && i.col.fed < 1)) want('hungry');
+    if (owned(S).some(i => i.col && i.col.strike)) want('strike');
+    if (S.ship.hungry || (S.ship.mor !== undefined && S.ship.mor < 0.9) || ((S.ship.cargo.raciones || 0) < 2 && PV.scene === 'sea')) want('crew');
   }
 
   function render(S, item, key, step) {

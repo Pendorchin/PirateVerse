@@ -10,7 +10,7 @@
   const HELP = {
     sea: [[['I'], 'investigación'], [['W', 'S'], 'velas'], [['A', 'D'], 'timón'], [['Q'], 'cañones babor'], [['E'], 'cañones estribor'], [['F'], 'interactuar'], [['Rueda'], 'zoom']],
     port: [[['Esc'], 'zarpar']],
-    island: [[['1', '0'], 'edificios'], [['M'], 'muelle'], [['C'], 'cartógrafo'], [['B'], 'banquero'], [['G', 'K'], 'defensas'], [['I'], 'investigación'], [['R'], 'rotar'], [['Clic'], 'construir · elegir receta'], [['Clic der.'], 'quitar'],
+    island: [[['1', '0'], 'edificios'], [['M'], 'muelle'], [['C'], 'cartógrafo'], [['B'], 'banquero'], [['T'], 'taberna'], [['G', 'K'], 'defensas'], [['I'], 'investigación'], [['R'], 'rotar'], [['Clic'], 'construir · elegir receta'], [['Clic der.'], 'quitar'],
       [['W', 'A', 'S', 'D'], 'cámara'], [['Rueda'], 'zoom'], [['Esc'], 'zarpar']],
   };
   const resName = k => D.RES[k].n;
@@ -143,6 +143,8 @@
       html: recipeOpts(b.type, b) }),
     taller: b => ({ title: `${D.BUILD[b.type].icon} ${D.BUILD[b.type].n}: receta`, sub: '',
       html: recipeOpts(b.type, b) }),
+    destileria: b => ({ title: `${D.BUILD[b.type].icon} ${D.BUILD[b.type].n}: receta`, sub: 'La caña fina crece en islas ★★ y ★★★.',
+      html: recipeOpts(b.type, b) }),
     muelle: b => ({ title: '⚓ Muelle: al llegar, bajar del barco…', sub: 'Lo que marques se baja solo al almacén una vez, cuando llegás a la isla o desembarcás. Lo que cargues a mano después no se toca. (Lo que traen los senderos al muelle se sube solo al barco.)',
       html: resOpts(k => b.unload.includes(k)), multi: true }),
   };
@@ -233,6 +235,7 @@
       </div>
       <div class="lbl">💣 Munición: ${ammoTxt(sh.cargo)}</div>
       ${researchLine()}
+      ${PV.Colony.crewLine()}
       <div class="lbl"><i class="crate"></i> Bodega ${PV.Inv.cargoTotal()} / ${st.cap}</div>
       <div class="chips">${PV.Inv.chips(sh.cargo)}</div>`;
   }
@@ -244,6 +247,7 @@
     return researchLine() + `<h3>${isl.name}</h3>
       <div class="sub">${isl.home ? 'Tu isla inicial' : '★'.repeat(isl.tier) + ' ' + D.TIERS[isl.tier].n} · <i class="coin"></i> ${U.fmt(PV.state.doblones)}</div>
       <div class="lbl"><i class="crate"></i> Almacén ${Inv.storageTotal(isl)} / ${cap} <span class="muted">· subir al barco</span></div>
+      ${PV.Colony.islandLine(isl)}
       ${cap ? '' : '<div class="muted">Construí un almacén (<kbd>4</kbd>) para guardar lo que producís.</div>'}
       ${invRows(isl.storage, 'ld', '⬆')}
       <div class="lbl"><i class="crate"></i> Bodega del barco ${Inv.cargoTotal()} / ${Inv.cargoCap()} <span class="muted">· bajar a la isla</span></div>
@@ -357,6 +361,8 @@
       if (p) $('prompt').innerHTML = p;
     }
     if (s !== 'menu') PV.Tutorial.update();
+    $('clock').classList.toggle('hidden', s === 'menu');
+    if (s !== 'menu') { $('clock').innerHTML = PV.Colony.clock(); $('clock').classList.toggle('night', PV.Colony.isNight()); }
     const rb = s === 'menu' ? '' : PV.Raid.banner();
     $('raidBanner').classList.toggle('hidden', !rb);
     if (rb) $('raidBanner').innerHTML = rb;

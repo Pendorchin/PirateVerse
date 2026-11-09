@@ -35,14 +35,20 @@
     acero:          { n: 'Acero',             c: '#5d6d7e', p: 110 },
     canon_bronce:   { n: 'Cañón de bronce',   c: '#a0662a', p: 320 },
     velamen:        { n: 'Velamen',           c: '#fbf6e9', p: 130 },
+    pescado:        { n: 'Pescado',           c: '#7fb3d5', p: 3 },
+    cana:           { n: 'Caña de azúcar',    c: '#a9cc5b', p: 3 },
+    raciones:       { n: 'Raciones',          c: '#c8925a', p: 9 },
+    ron:            { n: 'Ron',               c: '#8e3b1f', p: 20 },
+    cana_fina:      { n: 'Caña fina',         c: '#d4e157', p: 9 },
+    ron_anejo:      { n: 'Ron añejo',         c: '#5d2a12', p: 60 },
   };
 
   // Niveles de isla: más lejos del inicio = más raro y más peligroso.
   D.TIERS = [
     null,
-    { n: 'Común',      c: '#8fd17a', res: ['madera', 'piedra', 'cobre', 'estano'], towers: 0, guards: 0 },
-    { n: 'Poco común', c: '#5dade2', res: ['hierro', 'carbon', 'algodon', 'madera'], towers: 2, guards: 1 },
-    { n: 'Rara',       c: '#bb8fce', res: ['plata', 'azufre', 'especias', 'carbon'], towers: 3, guards: 2 },
+    { n: 'Común',      c: '#8fd17a', res: ['madera', 'piedra', 'cobre', 'estano', 'cana'], towers: 0, guards: 0 },
+    { n: 'Poco común', c: '#5dade2', res: ['hierro', 'carbon', 'algodon', 'madera', 'cana_fina'], towers: 2, guards: 1 },
+    { n: 'Rara',       c: '#bb8fce', res: ['plata', 'azufre', 'especias', 'carbon', 'cana_fina'], towers: 3, guards: 2 },
     { n: 'Épica',      c: '#f5b041', res: ['oro', 'gemas', 'coral', 'plata'], towers: 4, guards: 3 },
     { n: 'Legendaria', c: '#ec7063', res: ['cristal', 'oro', 'gemas', 'coral'], towers: 5, guards: 4 },
   ];
@@ -81,6 +87,16 @@
                    desc: 'Guarnición: reduce el saqueo y repara sola los edificios rotos con el tiempo.' },
     torre_vigia: { n: 'Torre vigía', key: 'KeyK', k: 'K', icon: '🔭', w: 1, h: 1, cost: { doblones: 120, tablones: 20, piedra: 10 },
                    desc: 'Ve a los piratas desde lejos: avisa un minuto antes y los marca en el mapa.' },
+    pesqueria:   { n: 'Pesquería',  key: 'KeyP', k: 'P', icon: '🎣', w: 2, h: 2, cost: { doblones: 60 },
+                   desc: 'Pescadores en la costa: sacan pescado del mar. Tiene que tocar el agua.' },
+    canaveral:   { n: 'Cañaveral',  key: 'KeyU', k: 'U', icon: '🌾', w: 3, h: 3, cost: { doblones: 60 },
+                   desc: 'Cultiva la caña silvestre y nunca se agota. No crece en Isla Refugio: la caña está en islas ★, y la caña fina (para ron añejo) en ★★ y ★★★.' },
+    cocina:      { n: 'Cocina',     key: 'KeyO', k: 'O', icon: '🍲', w: 2, h: 2, cost: { doblones: 80, piedra: 10 },
+                   desc: 'Cocineros que convierten pescado en raciones.' },
+    destileria:  { n: 'Destilería', key: 'KeyL', k: 'L', icon: '🥃', w: 3, h: 3, cost: { doblones: 120, piedra: 15 },
+                   desc: 'Alambiques que destilan la caña en ron, o la caña fina en ron añejo. Clic para elegir.' },
+    taberna:     { n: 'Taberna',    key: 'KeyT', k: 'T', icon: '🍺', w: 3, h: 3, cost: { doblones: 120, piedra: 10 },
+                   desc: 'De noche tu gente viene a comer, tomar ron y descansar. Mandale raciones y ron por senderos.' },
     cartografo:  { n: 'Cartógrafo', key: 'KeyC', k: 'C', icon: '🗺️', w: 2, h: 2, cost: { doblones: 120, tablones: 20, piedra: 10 },
                    desc: 'Estudia materiales para investigar mejoras. Mandale lo que pide la investigación actual. Clic para elegir qué investigar.' },
   };
@@ -118,6 +134,7 @@
   // Pestañas del menú de construcción. Las evoluciones van con su edificio base.
   D.BUILD_CATS = [
     { k: 'rec', n: 'Recursos', icon: '⛏️', list: ['lenadores', 'extractor', 'cinta', 'almacen'] },
+    { k: 'food', n: 'Comida y ron', icon: '🍺', list: ['pesqueria', 'canaveral', 'cocina', 'destileria', 'taberna'] },
     { k: 'fab', n: 'Fábricas', icon: '🔥', list: ['aserradero', 'fundicion', 'herreria', 'taller'] },
     { k: 'log', n: 'Logística', icon: '💪', list: ['clasificador', 'insertador', 'muelle'] },
     { k: 'eco', n: 'Investigación y banca', icon: '🗺️', list: ['cartografo', 'banco'] },
@@ -159,6 +176,29 @@
       bala_explosiva: { in: { balas: 2, polvora: 1 }, out: 'bala_explosiva', n: 2, t: 3 },
     },
   };
+  D.RECIPES.cocina = { raciones: { in: { pescado: 1 }, out: 'raciones', n: 2, t: 2 } };
+  D.RECIPES.destileria = {
+    ron:       { in: { cana: 2 }, out: 'ron', n: 1, t: 3 },
+    ron_anejo: { in: { cana_fina: 2 }, out: 'ron_anejo', n: 1, t: 4 },
+  };
+  // Productores que no necesitan yacimiento: k es lo que sacan, rate por segundo.
+  D.PRODUCE = { pesqueria: { k: 'pescado', rate: 0.4 } };
+
+  // ---------- Vida en la colonia ----------
+  //   day: segundos de un día entero; night: cuánto dura la noche (al final del día); fade: atardecer / amanecer.
+  //   crew: trabajadores de cada edificio (las evoluciones, el doble). food: edificios de comida (no hacen huelga).
+  //   Cada noche cada trabajador come 1 ración y toma ronPer de ron. seats: lugares por taberna.
+  //   strike: con la moral por debajo de esto, hay huelga.
+  //   ship / merchant: lo que gasta por día tu tripulación y cada mercante por viaje.
+  D.COLONY = {
+    day: 360, night: 120, fade: 20,
+    crew: { extractor: 2, lenadores: 2, aserradero: 2, fundicion: 2, herreria: 2, taller: 2, cartografo: 1, pesqueria: 1, canaveral: 2, cocina: 1, destileria: 2 },
+    food: ['pesqueria', 'canaveral', 'cocina', 'destileria'],
+    ronPer: 0.5, anejo: 0.1, // el ron añejo cuenta como ron y además sube la moral seats: 20, tavernMax: 40, strike: 0.2,
+    ship: { raciones: 2, ron: 1 }, merchant: { raciones: 1, ron: 1 },
+    start: { raciones: 30, ron: 15 }, shipStart: { raciones: 6, ron: 3 },
+  };
+
   D.RECIPES.gran_herreria = Object.assign({}, D.RECIPES.herreria, {
     canon_bronce: { in: { bronce: 4, acero: 1 }, out: 'canon_bronce', n: 1, t: 6 },
   });

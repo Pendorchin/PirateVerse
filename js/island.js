@@ -37,8 +37,13 @@
   function landAt(isl, x, y) { return inside(isl, x, y) ? isl.grid.land[y * isl.grid.w + x] : 0; }
 
   // Los leñadores solo talan árboles; la mina saca todo lo demás.
-  const DIGGERS = { lenadores: 1, extractor: 1 };
-  const digs = (type, k) => !!k && (D.base(type) === 'lenadores' ? k === 'madera' : k !== 'madera');
+  // El cañaveral cultiva la caña silvestre (no se agota).
+  const DIGGERS = { lenadores: 1, extractor: 1, canaveral: 1 };
+  const digs = (type, k) => {
+    if (!k) return false;
+    const kb = D.base(type);
+    return kb === 'lenadores' ? k === 'madera' : kb === 'canaveral' ? (k === 'cana' || k === 'cana_fina') : k !== 'madera' && k !== 'cana' && k !== 'cana_fina';
+  };
   const isDigger = type => !!DIGGERS[D.base(type)];
   // Alto horno: además de minerales, convierte lingotes de hierro en acero.
   const smeltOf = b => b.type === 'alto_horno' ? Object.assign({}, D.SMELT, D.SMELT_BIG) : D.SMELT;
@@ -54,7 +59,7 @@
         if (digs(type, g.res[ty * g.w + tx])) res++;
       }
     }
-    if (D.base(type) === 'muelle' || type === 'bateria') return touchesWater(isl, x, y, def);
+    if (D.base(type) === 'muelle' || type === 'bateria' || type === 'pesqueria') return touchesWater(isl, x, y, def);
     return !isDigger(type) || res > 0;
   };
 
@@ -70,7 +75,7 @@
     if (lock) { if (!quiet) PV.UI.toast(`Primero investigá «${D.TECH[lock].n}» en un Cartógrafo (tecla I).`, 'bad'); return null; }
     if (!Isl.canPlace(isl, type, x, y)) {
       const kb = D.base(type);
-      if (!quiet) PV.UI.toast(kb === 'extractor' ? 'La mina tiene que ir sobre piedra o mineral.' : kb === 'lenadores' ? 'Los leñadores tienen que ir sobre árboles.' : kb === 'muelle' ? 'El muelle tiene que tocar el agua.' : kb === 'bateria' ? 'La batería tiene que ir en la costa.' : 'No se puede construir ahí.', 'bad');
+      if (!quiet) PV.UI.toast(kb === 'extractor' ? 'La mina tiene que ir sobre piedra o mineral.' : kb === 'lenadores' ? 'Los leñadores tienen que ir sobre árboles.' : kb === 'muelle' ? 'El muelle tiene que tocar el agua.' : kb === 'bateria' ? 'La batería tiene que ir en la costa.' : kb === 'pesqueria' ? 'La pesquería tiene que tocar el agua.' : kb === 'canaveral' ? 'El cañaveral tiene que ir sobre caña de azúcar silvestre (crece en otras islas, no en Isla Refugio).' : 'No se puede construir ahí.', 'bad');
       return null;
     }
     const cost = D.BUILD[type].cost;
@@ -85,7 +90,7 @@
     if (kd === 'aserradero') b.n = 0;
     if (kd === 'clasificador') { b.filter = null; b.hold = null; }
     if (kd === 'insertador') { b.filter = null; b.hand = null; b.handN = 0; }
-    if (kd === 'cartografo') b.inv = {};
+    if (kd === 'cartografo' || kd === 'taberna') b.inv = {};
     if (kd === 'bateria') { b.ammo = {}; b.cd = 0; }
     if (D.RECIPES[type]) { b.recipe = Object.keys(D.RECIPES[type])[0]; b.inv = {}; }
     if (kd === 'muelle') { b.store = {}; b.unload = []; }
@@ -151,7 +156,11 @@
         if (b.hold) return false;
         if (!dry) b.hold = item;
         return true;
-      case 'herreria': case 'taller': {
+      case 'taberna':
+        if (!['raciones', 'ron', 'ron_anejo'].includes(item) || (b.inv[item] || 0) >= PV.D.COLONY.tavernMax) return false;
+        if (!dry) PV.Inv.add(b.inv, item, 1);
+        return true;
+      case 'herreria': case 'taller': case 'cocina': case 'destileria': {
         const need = D.RECIPES[b.type][b.recipe].in[item];
         if (!need || (b.inv[item] || 0) >= need * 3) return false;
         if (!dry) PV.Inv.add(b.inv, item, 1);
@@ -214,8 +223,20 @@
   function updateBuilding(isl, b, dt) {
     if (b.broken) return;
     const g = isl.grid, def = D.BUILD[b.type], spd = spdOf(b);
+    // De noche o en huelga no se trabaja; sin comida o sin taberna se trabaja más lento.
+    const wk = PV.Colony.work(isl, b);
+    if (wk !== 1) dt *= wk;
     switch (D.base(b.type)) {
-      case 'extractor': case 'lenadores': {
+      case 'pesqueria': {
+        const pr = D.PRODUCE[b.type];
+        if (b.out.length < 3) {
+          b.prog += dt * pr.rate * PV.Tech.fx('mine');
+          if (b.prog >= 1) { b.prog = 0; b.out.push(pr.k); }
+        }
+        pushOut(isl, b);
+        break;
+      }
+      case 'extractor': case 'lenadores': case 'canaveral': case 'canaveral': {
         if (!b.out.length && !b.empty) {
           b.prog += dt * D.EXTRACT_RATE * PV.Tech.fx('mine') * spd;
           if (b.prog >= 1) {
@@ -228,7 +249,7 @@
               if (digs(b.type, g.res[idx]) && g.amt[idx] > 0) {
                 b.out.push(g.res[idx]);
                 // El Campamento replanta: los árboles no se agotan. La Mina profunda a veces encuentra plata.
-                if (b.type !== 'campamento' && Math.random() >= PV.Tech.fx('keep') && --g.amt[idx] <= 0) g.res[idx] = '';
+                if (b.type !== 'campamento' && b.type !== 'canaveral' && Math.random() >= PV.Tech.fx('keep') && --g.amt[idx] <= 0) g.res[idx] = '';
                 if (b.type === 'mina_profunda' && Math.random() < 0.04) b.out.push('plata');
                 b.ri = i + 1;
                 mined = true;
@@ -310,7 +331,7 @@
         }
         break;
       }
-      case 'herreria': case 'taller': {
+      case 'herreria': case 'taller': case 'cocina': case 'destileria': {
         const r = D.RECIPES[b.type][b.recipe];
         b.on = b.out.length < 4 && Object.keys(r.in).every(k => (b.inv[k] || 0) >= r.in[k]);
         if (b.on) {
@@ -354,7 +375,15 @@
 
   function stuckReason(isl, b) {
     if (b.broken) return { ic: '🔥', lvl: 'dead', msg: 'Roto por los piratas: hacé clic para repararlo (' + Isl.costTxt(Isl.repairCost(b)) + ').' };
+    if (PV.Colony.isWorker(b)) {
+      if (PV.Colony.isNight()) return null; // de noche están en la taberna: no es un problema
+      if (PV.Colony.st(isl).strike && !PV.Colony.isFood(b)) return { ic: '✊', lvl: 'wait', msg: 'Huelga: sin ron la moral está por el piso. Llevá ron a la taberna o al almacén.' };
+    }
     switch (D.base(b.type)) {
+      case 'pesqueria':
+        return b.out.length >= 3 ? outBlocked(isl, b) : null;
+      case 'taberna':
+        return (b.inv.raciones || 0) + (b.inv.ron || 0) + (b.inv.ron_anejo || 0) ? null : { ic: '🍺', lvl: 'wait', msg: 'Sin raciones ni ron: mandáselos por un sendero (si no, comen de lo que haya en el almacén).' };
       case 'bateria':
         return PV.Inv.sum(b.ammo) ? null : { ic: '💤', lvl: 'wait', msg: 'Sin balas: dispara metralla débil. Mandale balas por un sendero.' };
       case 'extractor': case 'lenadores':
@@ -370,7 +399,7 @@
         if (b.out.length >= 4) return outBlocked(isl, b);
         if (b.n < 1) return { ic: '💤', lvl: 'wait', msg: 'Falta madera: mandásela por un sendero.' };
         return null;
-      case 'herreria': case 'taller': {
+      case 'herreria': case 'taller': case 'cocina': case 'destileria': {
         if (b.out.length >= 4) return outBlocked(isl, b);
         const m = missing(b.inv, D.RECIPES[b.type][b.recipe].in);
         return m.length ? { ic: '💤', lvl: 'wait', msg: 'Falta: ' + m.join(', ') + '.' } : null;
@@ -699,7 +728,7 @@
       if (b._warn) s += `<span style="color:${b._warn.lvl === 'wait' ? '#f1c40f' : '#ff7b6b'}">${b._warn.ic} ${b._warn.msg}</span><br>`;
       if (isDigger(b.type)) {
         const tot = resUnder(isl, b), keys = Object.keys(tot);
-        s += keys.length ? keys.map(k => `${D.RES[k].n}: quedan ${tot[k]}`).join('<br>') : '<span style="color:#e74c3c">Yacimiento agotado</span>';
+        s += b.type === 'canaveral' ? `Caña cultivada: nunca se agota · ${(D.EXTRACT_RATE * 60 * PV.Tech.fx('mine')).toFixed(0)} por minuto de día` : keys.length ? keys.map(k => `${D.RES[k].n}: quedan ${tot[k]}`).join('<br>') : '<span style="color:#e74c3c">Yacimiento agotado</span>';
       } else if (kb === 'fundicion') {
         s += `Mineral: ${b.oreN ? D.RES[b.ore].n + ' ×' + b.oreN : '—'}<br>Combustible: ${b.fuel}`;
         s += b.on ? '<br>🔥 Fundiendo…' : '<br><i>Necesita 2 minerales y combustible (madera o carbón).</i>';
@@ -714,10 +743,16 @@
       } else if (kb === 'insertador') {
         s += `Agarra: <b>${b.filter ? D.RES[b.filter].n : 'cualquier cosa'}</b>` + (b.hand ? `<br>Lleva: ${D.RES[b.hand].n} ×${b.handN || 1}` : '') +
           `<br>${(INS_T / PV.Tech.fx('ins')).toFixed(2)} s por viaje · hasta ${1 + PV.Tech.fx('carry')} por vez<br><i>Clic para filtrar.</i>`;
+      } else if (D.PRODUCE[b.type]) {
+        const pr = D.PRODUCE[b.type];
+        s += `Saca <b>${D.RES[pr.k].n}</b>: ${(pr.rate * 60 * PV.Tech.fx('mine')).toFixed(0)} por minuto de día`;
+      } else if (kb === 'taberna') {
+        const C = D.COLONY;
+        s += `Raciones: ${b.inv.raciones || 0} / ${C.tavernMax} · Ron: ${b.inv.ron || 0} / ${C.tavernMax}${b.inv.ron_anejo ? ' · Ron añejo: ' + b.inv.ron_anejo : ''}<br>Lugares: ${C.seats} trabajadores<br><i>De noche tu gente viene a comer y tomar ron. Si no alcanza, comen del almacén.</i>`;
       } else if (D.RECIPES[b.type]) {
         const r = D.RECIPES[b.type][b.recipe];
         s += `Receta: <b>${recipeTxt(r)}</b><br>Tiene: ${Object.keys(r.in).map(k => D.RES[k].n + ' ' + (b.inv[k] || 0) + '/' + r.in[k]).join(', ')}`;
-        s += b.on ? '<br>🔨 Trabajando…' : '<br><i>Clic para cambiar la receta.</i>';
+        s += b.on ? '<br>🔨 Trabajando…' : Object.keys(D.RECIPES[b.type]).length > 1 ? '<br><i>Clic para cambiar la receta.</i>' : '';
       } else if (kb === 'bateria') {
         const am = Object.keys(b.ammo).filter(k => b.ammo[k] > 0);
         s += `Munición: ${am.length ? am.map(k => D.RES[k].n + ' ' + b.ammo[k]).join(', ') : 'ninguna (metralla débil)'} / ${D.RAID.battery.max}<br>Alcance: ${D.RAID.battery.range} · daño ${D.RAID.battery.ammo.balas} con balas, ${D.RAID.battery.ammo.bala_explosiva} con explosivas`;
@@ -734,6 +769,7 @@
       } else if (kb === 'muelle') {
         s += `Carga esperando: ${PV.Inv.sum(b.store)} / ${Isl.dockCap(b)}` + (b.unload.length ? `<br>Descarga del barco: ${b.unload.map(k => D.RES[k].n).join(', ')}` : '') + '<br><i>Clic para elegir qué descargar.</i>';
       }
+      if (PV.Colony.isWorker(b)) s += `<br>👷 ${PV.Colony.crewOf(b)} trabajador${PV.Colony.crewOf(b) > 1 ? 'es' : ''}${PV.Colony.isNight() ? ' (en la taberna)' : ''}`;
       return s + '<br><span style="opacity:.7">R rotar · clic derecho quitar</span>';
     }
     const idx = ty * g.w + tx;
@@ -795,6 +831,7 @@
 
   // Trabajador con herramienta (pico, hacha, martillo) que se mueve si está trabajando.
   function drawWorker(ctx, x, y, a, shirt, swing, tool) {
+    if (Isl._night) return;
     drawPerson(ctx, x, y, a, shirt, 0);
     ctx.save(); ctx.translate(x, y); ctx.rotate(a + Math.sin(swing) * 0.7);
     ctx.strokeStyle = '#6d4c2a'; ctx.lineWidth = 2;
@@ -846,7 +883,7 @@
     ctx.strokeStyle = line; ctx.lineWidth = 2; ctx.stroke();
   }
 
-  const NO_ARROW = ['almacen', 'muelle', 'cartografo', 'banco', 'bateria', 'empalizada', 'cuartel', 'torre_vigia'];
+  const NO_ARROW = ['taberna', 'almacen', 'muelle', 'cartografo', 'banco', 'bateria', 'empalizada', 'cuartel', 'torre_vigia'];
   function drawMachine(ctx, b, isl, t) {
     const def = D.BUILD[b.type], px = b.x * T, py = b.y * T, w = def.w * T, h = def.h * T;
     if (def.of) return drawEvolved(ctx, b, isl, t, def);
@@ -854,7 +891,7 @@
     const busy = isl ? t * 8 + (b.id || 0) : 0;
     if (def.w > 1) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; rrect(ctx, px + 5, py + 6, w - 6, h - 6, 6); ctx.fill(); }
 
-    if (DIGGERS[b.type]) {
+    if (DIGGERS[b.type] && b.type !== 'canaveral') {
       const tot = isl ? resUnder(isl, b) : {};
       const main = Object.keys(tot).sort((a, c) => tot[c] - tot[a])[0];
       const working = isl && !b.empty && !(b.out && b.out.length);
@@ -1011,6 +1048,100 @@
       drawPerson(ctx, cx - 18 + march, py + h - 18, 0, '#8e1b1b', isl ? t * 6 : 0, '#1a1a1a');
       drawPerson(ctx, cx + 18 - march, py + h - 18, Math.PI, '#8e1b1b', isl ? t * 6 + 2 : 0, '#1a1a1a');
       drawPerson(ctx, px + w - 14, cy + 6, -Math.PI / 2, '#8e1b1b', 0, '#1a1a1a');
+    } else if (b.type === 'pesqueria') {
+      // Muelle de pesca: tablas, redes colgadas, una canasta con pescado y el pescador con su caña.
+      floor(ctx, px, py, w, h, '#9c7a4e', '#5e3b1c');
+      ctx.strokeStyle = 'rgba(60,35,15,0.35)'; ctx.lineWidth = 1;
+      for (let i = 1; i < 6; i++) { ctx.beginPath(); ctx.moveTo(px + 4, py + i * 10.5); ctx.lineTo(px + w - 4, py + i * 10.5); ctx.stroke(); }
+      ctx.strokeStyle = 'rgba(230,220,190,0.8)'; ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) {
+        ctx.beginPath(); ctx.moveTo(px + 8 + i * 5, py + 8); ctx.lineTo(px + 8 + i * 5, py + 30);
+        ctx.moveTo(px + 8, py + 10 + i * 5); ctx.lineTo(px + 30, py + 10 + i * 5); ctx.stroke();
+      }
+      ctx.fillStyle = '#7a5230'; ctx.beginPath(); ctx.ellipse(px + w - 16, py + h - 16, 9, 7, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#7fb3d5';
+      for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(px + w - 20 + i * 4, py + h - 18 + (i % 2) * 3, 3.5, 1.6, 0.4, 0, TAU); ctx.fill(); }
+      const bob = isl && !Isl._night ? Math.sin(t * 2 + (b.id || 0)) * 3 : 0;
+      drawWorker(ctx, px + w - 18, py + 18, -0.6, '#3d5a80', 0, 'none');
+      if (!Isl._night) {
+        ctx.strokeStyle = '#5e3b1c'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(px + w - 14, py + 14); ctx.lineTo(px + w + 10, py - 8); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.moveTo(px + w + 10, py - 8); ctx.lineTo(px + w + 12, py + 6 + bob); ctx.stroke();
+        ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.arc(px + w + 12, py + 7 + bob, 2, 0, TAU); ctx.fill();
+      }
+    } else if (b.type === 'canaveral') {
+      // Surcos de caña de azúcar y un cortador con machete.
+      floor(ctx, px, py, w, h, '#7a6a3a', '#4e4226');
+      for (let r = 0; r < 5; r++) {
+        const yy = py + 12 + r * 18;
+        ctx.fillStyle = 'rgba(60,45,20,0.4)'; ctx.fillRect(px + 6, yy + 4, w - 12, 3);
+        for (let i = 0; i < 9; i++) {
+          const xx = px + 10 + i * 9.5, sway = isl ? Math.sin(t * 1.6 + i + r) * 1.5 : 0;
+          ctx.strokeStyle = '#5f8f2f'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(xx, yy + 5); ctx.lineTo(xx + sway, yy - 6); ctx.stroke();
+          ctx.fillStyle = '#a9cc5b'; ctx.beginPath(); ctx.ellipse(xx + sway, yy - 7, 3.5, 1.5, -0.6, 0, TAU); ctx.fill();
+        }
+      }
+      drawWorker(ctx, px + 24, py + h - 14, -Math.PI / 2, '#a04000', busy, 'hacha');
+      drawWorker(ctx, px + w - 26, py + 28, Math.PI / 2, '#556b2f', busy + 2, 'hacha');
+    } else if (b.type === 'cocina') {
+      // Cocina al aire libre: olla grande sobre el fuego, mesa con pescado y el cocinero.
+      floor(ctx, px, py, w, h, '#a39b8b', '#5a5246');
+      ctx.fillStyle = '#6b4423'; rrect(ctx, px + 6, py + 6, 22, 12, 2); ctx.fill();
+      ctx.fillStyle = '#7fb3d5'; ctx.beginPath(); ctx.ellipse(px + 13, py + 12, 4, 2, 0.3, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#c8925a'; ctx.beginPath(); ctx.arc(px + 22, py + 12, 3, 0, TAU); ctx.fill();
+      const fire = b.on ? 0.7 + Math.sin(t * 13) * 0.2 : 0.25;
+      ctx.fillStyle = `rgba(255,120,30,${fire})`; ctx.beginPath(); ctx.arc(cx + 8, cy + 10, 11, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#2b2b2b'; ctx.beginPath(); ctx.arc(cx + 8, cy + 8, 10, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#b9945a'; ctx.beginPath(); ctx.arc(cx + 8, cy + 8, 7.5, 0, TAU); ctx.fill();
+      if (b.on) {
+        ctx.fillStyle = 'rgba(240,240,240,0.35)';
+        for (let i = 0; i < 3; i++) { const ph = (t * 0.7 + i / 3) % 1; ctx.beginPath(); ctx.arc(cx + 8 + Math.sin(ph * 6) * 3, cy + 4 - ph * 26, 3 + ph * 6, 0, TAU); ctx.fill(); }
+      }
+      drawWorker(ctx, px + 14, py + h - 14, -0.4, '#f4f1e1', b.on ? busy * 0.5 : 0, 'none');
+    } else if (b.type === 'destileria') {
+      // Alambique de cobre con su serpentín, barriles de ron y el destilador.
+      floor(ctx, px, py, w, h, '#8a6a4a', '#4a3020');
+      ctx.fillStyle = '#2a1410'; ctx.beginPath(); ctx.arc(cx - 12, cy + 4, 18, 0, TAU); ctx.fill();
+      const glow = b.on ? 0.55 + Math.sin(t * 11) * 0.2 : 0.15;
+      ctx.fillStyle = `rgba(255,120,30,${glow})`; ctx.beginPath(); ctx.arc(cx - 12, cy + 10, 10, 0, Math.PI); ctx.fill();
+      ctx.fillStyle = '#c87533'; ctx.beginPath(); ctx.arc(cx - 12, cy, 15, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#e59866'; ctx.beginPath(); ctx.arc(cx - 16, cy - 4, 6, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#a0522d'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(cx - 2, cy - 8); ctx.quadraticCurveTo(cx + 14, cy - 22, cx + 22, cy - 8); ctx.stroke();
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(cx + 22, cy - 4 + i * 6, 7, 2.5, 0, 0, TAU); ctx.stroke(); }
+      for (let i = 0; i < 3; i++) {
+        const bx = px + 14 + i * 16, by = py + h - 14;
+        ctx.fillStyle = '#7a4a22'; ctx.beginPath(); ctx.arc(bx, by, 7, 0, TAU); ctx.fill();
+        ctx.strokeStyle = '#3b2410'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(bx, by, 7, 0, TAU); ctx.arc(bx, by, 4, 0, TAU); ctx.stroke();
+      }
+      drawWorker(ctx, px + w - 18, py + h - 20, Math.PI, '#5a3a1e', b.on ? busy * 0.5 : 0, 'none');
+    } else if (b.type === 'taberna') {
+      // Taberna: piso de madera, barra, barriles, mesas con bancos. De noche se llena de gente.
+      floor(ctx, px, py, w, h, '#8b5e34', '#4a2e14');
+      ctx.strokeStyle = 'rgba(40,20,5,0.3)'; ctx.lineWidth = 1;
+      for (let i = 1; i < 9; i++) { ctx.beginPath(); ctx.moveTo(px + 4, py + i * 10.5); ctx.lineTo(px + w - 4, py + i * 10.5); ctx.stroke(); }
+      ctx.fillStyle = '#5e3b1c'; rrect(ctx, px + 6, py + 6, w - 12, 12, 3); ctx.fill();
+      ctx.fillStyle = '#7a4a22';
+      for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(px + w - 14 - i * 12, py + 12, 5, 0, TAU); ctx.fill(); }
+      const tables = [[px + 28, py + 46], [px + w - 28, py + 46], [cx, py + h - 22]];
+      for (const [tx, ty] of tables) {
+        ctx.fillStyle = '#6b4423'; ctx.beginPath(); ctx.arc(tx, ty, 9, 0, TAU); ctx.fill();
+        ctx.strokeStyle = '#3b2410'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = '#d4a017'; ctx.beginPath(); ctx.arc(tx - 3, ty - 2, 2, 0, TAU); ctx.arc(tx + 3, ty + 2, 2, 0, TAU); ctx.fill();
+      }
+      drawPerson(ctx, px + 20, py + 12, Math.PI / 2, '#f4f1e1', isl ? Math.sin(t * 2) : 0, '#5a3a1e');
+      const crowd = isl ? Math.round(PV.Colony.dark() * 9) : 0;
+      const shirts = ['#7b3f2a', '#3d5a80', '#556b2f', '#a04000', '#2c3e50', '#8e1b1b'];
+      for (let i = 0; i < crowd; i++) {
+        const [tx, ty] = tables[i % 3], a = (i / 3) * 2.1 + (i % 3);
+        drawPerson(ctx, tx + Math.cos(a) * 14, ty + Math.sin(a) * 14, a + Math.PI, shirts[i % shirts.length], t * 4 + i, '#3b2410');
+      }
+      ctx.fillStyle = '#5e3b1c'; ctx.fillRect(px + w - 6, py + h - 30, 3, 26);
+      ctx.fillStyle = '#d4a017'; rrect(ctx, px + w - 22, py + h - 30, 16, 10, 2); ctx.fill();
+      ctx.fillStyle = '#5e3b1c'; ctx.font = 'bold 8px Georgia'; ctx.textAlign = 'center'; ctx.fillText('RON', px + w - 14, py + h - 22);
     } else if (b.type === 'torre_vigia') {
       // Torre de madera vista desde arriba con el vigía y su catalejo.
       ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(px + 5, py + 6, T - 6, T - 6);
@@ -1146,6 +1277,13 @@
           ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.arc(px + 18 + ox, py + 19 + oy, 12 * s, 0, TAU); ctx.fill();
           ctx.fillStyle = '#2e6b2a'; ctx.beginPath(); ctx.arc(px + 16 + ox, py + 16 + oy, 12 * s, 0, TAU); ctx.fill();
           ctx.fillStyle = '#3f8a36'; ctx.beginPath(); ctx.arc(px + 13 + ox, py + 13 + oy, 6 * s, 0, TAU); ctx.fill();
+        } else if (k === 'cana') {
+          for (let i = 0; i < 4; i++) {
+            const sx = px + 5 + U.hash(x * 3 + i, y * 7) * 22, sy = py + 26 - U.hash(x + i, y * 5) * 4;
+            ctx.strokeStyle = '#4f7f25'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + 1, sy - 18); ctx.stroke();
+            ctx.fillStyle = '#a9cc5b'; ctx.beginPath(); ctx.ellipse(sx + 2, sy - 18, 4, 1.6, -0.6, 0, TAU); ctx.fill();
+          }
         } else {
           ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(px, py, T, T);
           const n = a > 180 ? 4 : a > 80 ? 3 : 2;
@@ -1200,7 +1338,10 @@
       const [dx, dy] = DIRS[b.dir];
       for (const it of b.items) drawPorter(ctx, b.x * T + T / 2 + dx * (it.p - 0.5) * T, b.y * T + T / 2 + dy * (it.p - 0.5) * T, b.dir, it.t, t);
     }
+    Isl._night = PV.Colony.isNight();
     for (const b of isl.buildings) if (b.type !== 'cinta') drawMachine(ctx, b, isl, t);
+    Isl._night = false;
+    drawCommute(ctx, isl, t);
     for (const b of isl.buildings) if (b._warn) drawWarn(ctx, b, t);
 
     // Fantasma del edificio a colocar
@@ -1222,7 +1363,40 @@
       else ctx.strokeRect(Isl.hover[0] * T, Isl.hover[1] * T, T, T);
     }
     ctx.restore();
+    // Noche: faroles en las tabernas y en los edificios.
+    const toScr = (wx, wy) => [(wx - c.x) * c.z + PV.W / 2, (wy - c.y) * c.z + PV.H / 2];
+    const lights = [];
+    for (const b of isl.buildings) {
+      if (b.type === 'cinta' || b.type === 'empalizada') continue;
+      const def = D.BUILD[b.type], [sx, sy] = toScr((b.x + def.w / 2) * T, (b.y + def.h / 2) * T);
+      lights.push([sx, sy, (b.type === 'taberna' ? 170 : 26 + def.w * 14) * c.z]);
+    }
+    PV.Colony.drawNight(ctx, lights);
   };
+
+  // Al anochecer la gente camina de su trabajo a la taberna más cercana; al amanecer, vuelve.
+  const WALK = 14;
+  function drawCommute(ctx, isl, t) {
+    const C = D.COLONY, ph = PV.Colony.phase(), n0 = C.day - C.night;
+    let f;
+    if (ph >= n0 && ph < n0 + WALK) f = (ph - n0) / WALK;              // yendo
+    else if (ph >= C.day - WALK) f = 1 - (ph - (C.day - WALK)) / WALK;   // volviendo
+    else return;
+    const tavs = PV.Colony.taverns(isl);
+    if (!tavs.length) return;
+    const ctr = b => { const d = D.BUILD[b.type]; return [(b.x + d.w / 2) * T, (b.y + d.h / 2) * T]; };
+    let k = 0;
+    for (const b of isl.buildings) {
+      if (!PV.Colony.isWorker(b) || b.broken) continue;
+      const [bx, by] = ctr(b);
+      const tv = tavs.reduce((m, o) => { const [ox, oy] = ctr(o); const d = (ox - bx) ** 2 + (oy - by) ** 2; return d < m[0] ? [d, ox, oy] : m; }, [Infinity, 0, 0]);
+      for (let i = 0; i < Math.min(2, PV.Colony.crewOf(b)); i++, k++) {
+        const ff = U.clamp(f * 1.25 - i * 0.12 - (k % 5) * 0.03, 0, 1);
+        const x = bx + (tv[1] - bx) * ff + (i ? 6 : -6), y = by + (tv[2] - by) * ff;
+        drawPerson(ctx, x, y, Math.atan2(tv[2] - by, tv[1] - bx) + (ph >= n0 + WALK ? Math.PI : 0), ['#7b3f2a', '#3d5a80', '#556b2f'][k % 3], t * 9 + k, '#5a3a1e');
+      }
+    }
+  }
 
   PV.Island = Isl;
 })(window.PV);
