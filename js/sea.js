@@ -51,8 +51,8 @@
   }
 
   // Barco de un asalto pirata: navega hacia la isla atacada (home) y la rodea.
-  Sea.spawnRaider = function (isl, x, y, t, a) {
-    const hp = Math.round((40 + t * 35) * D.RAID.raidHp);
+  Sea.spawnRaider = function (isl, x, y, t, a, mul) {
+    const hp = Math.round((40 + t * 35) * D.RAID.raidHp * (mul || 1));
     Sea.enemies.push({
       x, y, a, v: 60, home: isl.id, pa: Math.atan2(y - isl.y, x - isl.x), tier: t, hp, max: hp, guns: Math.min(t + 1, 5), dmg: 4 + t * 2,
       speed: 85 + t * 12, rl: 1 + Math.random() * 2, rr: 1 + Math.random() * 2, aggro: false, raid: true,

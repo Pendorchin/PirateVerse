@@ -52,11 +52,15 @@
     const st = Raid.st(), o = owned().length, wealth = Raid.wealth();
     isl = isl || pickTarget();
     if (!isl) return false;
-    const ships = U.clamp(2 + Math.floor((o - 1) / 2) + (wealth > 4000) + (wealth > 15000) + (isl.tier >= 3), 1, 7);
-    const tier = U.clamp(1 + Math.floor((o - 1) / 2) + (isl.tier >= 3 ? 1 : 0), 1, 5);
+    // Cada asalto que pasa, los piratas vuelven con más barcos, mejores y más resistentes.
+    const n = st.count || 0;
+    const ships = U.clamp(2 + Math.floor((o - 1) / 2) + (wealth > 4000) + (wealth > 15000) + (isl.tier >= 3) + Math.floor(n / 2), 1, 10);
+    const tier = U.clamp(1 + Math.floor((o - 1) / 2) + (isl.tier >= 3 ? 1 : 0) + Math.floor(n / 3), 1, 5);
+    const hpMul = 1 + 0.08 * n;
+    st.count = n + 1;
     const warn = R.warn + (Raid.watched(isl) ? R.watch : 0);
-    st.cur = { isl: isl.id, phase: 'warn', t: warn, siege: R.siege, ships, tier };
-    PV.UI.toast(`⚠️ ¡${ships === 1 ? 'Un barco pirata se acerca' : ships + ' barcos piratas se acercan'} a ${isl.name}! Llegan en ${Math.round(warn)} s.`, 'bad');
+    st.cur = { isl: isl.id, phase: 'warn', t: warn, siege: R.siege, ships, tier, hpMul, n: n + 1 };
+    PV.UI.toast(`⚠️ Asalto n.º ${n + 1}: ¡${ships === 1 ? 'Un barco pirata se acerca' : ships + ' barcos piratas se acercan'} a ${isl.name}! Llegan en ${Math.round(warn)} s.`, 'bad');
     return true;
   };
 
@@ -64,7 +68,7 @@
     const isl = PV.state.islands[cur.isl], a0 = Math.random() * TAU;
     for (let i = 0; i < cur.ships; i++) {
       const a = a0 + (i - (cur.ships - 1) / 2) * 0.25, d = isl.R + 900;
-      PV.Sea.spawnRaider(isl, isl.x + Math.cos(a) * d, isl.y + Math.sin(a) * d, cur.tier, a + Math.PI);
+      PV.Sea.spawnRaider(isl, isl.x + Math.cos(a) * d, isl.y + Math.sin(a) * d, cur.tier, a + Math.PI, cur.hpMul || 1);
     }
   }
 
@@ -215,9 +219,9 @@
     const cur = Raid.st().cur;
     if (!cur) return '';
     const isl = S.islands[cur.isl], mm = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-    if (cur.phase === 'warn') return `⚠️ Piratas rumbo a <b>${isl.name}</b> · llegan en ${mm(cur.t)}`;
+    if (cur.phase === 'warn') return `⚠️ Asalto n.º ${cur.n || 1} · piratas rumbo a <b>${isl.name}</b> · llegan en ${mm(cur.t)}`;
     const n = Raid.ships().length, a = Raid.arrived().length;
-    return `⚔️ Asalto a <b>${isl.name}</b> · ${n} barco${n === 1 ? '' : 's'} · ` +
+    return `⚔️ Asalto n.º ${cur.n || 1} a <b>${isl.name}</b> · ${n} barco${n === 1 ? '' : 's'} · ` +
       (a ? `saquean en ${mm(cur.siege)}` : 'acercándose') + ` · protección ${Math.round(Raid.protection(isl) * 100)}%`;
   };
 
