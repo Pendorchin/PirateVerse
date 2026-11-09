@@ -158,8 +158,9 @@
   UI.CHOOSE = {
     clasificador: b => ({ title: '🧭 Capataz: ¿qué sigue derecho?', sub: 'Lo demás sale por los costados.',
       html: opt('', 'Todo', !b.filter) + resOpts(k => b.filter === k) }),
-    insertador: b => ({ title: '💪 Estibador: ¿qué agarra?', sub: 'Solo lleva lo que el de adelante acepta.',
-      html: opt('', 'Cualquier cosa', !b.filter) + resOpts(k => b.filter === k) }),
+    insertador: b => ({ title: '💪 Estibador: ¿qué agarra?', sub: 'Solo lleva lo que el de adelante acepta. «Lo que pide la investigación» lleva solo los materiales que le faltan a la investigación de ahora, aunque adelante haya un sendero.',
+      html: opt('', 'Cualquier cosa', !b.filter) + opt(PV.Island.INS_TECH, '🔬 Lo que pide la investigación', b.filter === PV.Island.INS_TECH, null, PV.Tech.lockOf('ins', 'tech'))
+        + opt(PV.Island.INS_NONE, '⛔ Nada (parado)', b.filter === PV.Island.INS_NONE) + resOpts(k => b.filter === k) }),
     herreria: b => ({ title: `${D.BUILD[b.type].icon} ${D.BUILD[b.type].n}: receta`, sub: '',
       html: recipeOpts(b.type, b) }),
     taller: b => ({ title: `${D.BUILD[b.type].icon} ${D.BUILD[b.type].n}: receta`, sub: '',

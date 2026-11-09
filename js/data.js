@@ -238,6 +238,7 @@
   };
   D.TECH = {
     estiba1:  { line: 'log', n: 'Estibadores ágiles', desc: 'Los estibadores caminan más rápido (+40%).', cost: { tablones: 15, piedra: 15 }, fx: { ins: 1.4 } },
+    estiba_mapa: { line: 'log', n: 'Estibadores con lista', desc: 'El estibador puede llevar solo lo que pide la investigación (el cartógrafo le pasa la lista).', req: ['estiba1'], cost: { tablones: 20, lingote_cobre: 8 }, unlock: { ins: 'tech' } },
     estiba2:  { line: 'log', n: 'Estibadores fuertes', desc: 'Cada estibador lleva hasta 2 cosas por viaje.', req: ['estiba1'], cost: { tablones: 25, lingote_cobre: 10 }, fx: { carry: 1 } },
     estiba3:  { line: 'log', n: 'Estibadores veteranos', desc: 'Más rápidos (+40%) y llevan hasta 3 por viaje.', req: ['estiba2'], cost: { lingote_hierro: 20, lingote_cobre: 15 }, fx: { ins: 1.4, carry: 1 } },
     estiba4:  { line: 'log', n: 'Maestros estibadores', desc: 'Más rápidos (+50%) y llevan hasta 4 por viaje.', req: ['estiba3'], cost: { placa_hierro: 15, bronce: 10 }, fx: { ins: 1.5, carry: 1 } },

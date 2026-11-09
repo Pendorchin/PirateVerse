@@ -157,6 +157,7 @@
       const [b, r] = u.recipe.split('.');
       return { t: `🔓 ¡Receta nueva: <b>${D.RES[r].n}</b>!`, h: `Hacé clic en un ${D.BUILD[b].n} y elegí la receta «${D.RES[r].n}». ${t.desc}` };
     }
+    if (u.ins) return { t: '🔓 ¡Estibadores con lista!', h: 'Hacé clic en un estibador y elegí <b>🔬 Lo que pide la investigación</b>: saca del almacén solo lo que le falta a la investigación de ahora, aunque adelante tenga un sendero que va al cartógrafo.' };
     if (u.feature === 'inversiones') return { t: '🔓 ¡Desbloqueaste las <b>inversiones</b>!', h: 'Hacé clic en tu Banquero: podés invertir en rutas, expediciones o contrabando. Cuanto más riesgo, más ganancia… o más pérdida.' };
     return { t: `🔓 ¡${t.n}!`, h: t.desc };
   }

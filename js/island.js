@@ -199,9 +199,31 @@
     return t.type === 'cinta' ? beltInsert(t, item, dry) : accept(isl, t, item, dry);
   }
 
+  // Modos especiales del estibador (b.filter): parado, o solo lo que pide la investigación.
+  Isl.INS_NONE = '__none'; Isl.INS_TECH = '__tech';
+  // Cuánto falta para la investigación de k, sin contar lo que ya va en camino en esta isla
+  // (en los cartógrafos, en los senderos y en manos de los estibadores).
+  function techMissing(isl, k) {
+    let left = PV.Tech.need(k);
+    if (left <= 0) return 0;
+    for (const o of isl.buildings) {
+      const kb = D.base(o.type);
+      if (kb === 'cartografo') left -= (o.inv && o.inv[k]) || 0;
+      else if (kb === 'cinta') { for (const it of o.items) if (it.t === k) left--; }
+      else if (kb === 'insertador' && o.hand === k) left -= o.handN || 1;
+    }
+    return left;
+  }
+  function insWants(isl, b, k) {
+    if (!b.filter) return true;
+    if (b.filter === Isl.INS_NONE) return false;
+    if (b.filter === Isl.INS_TECH) return techMissing(isl, k) > 0;
+    return b.filter === k;
+  }
+
   // El estibador toma de lo que tiene atrás algo que lo de adelante acepte.
   function grab(isl, b, src, fx, fy, only) {
-    const ok = k => (!only || only === k) && (!b.filter || b.filter === k) && give(isl, b, fx, fy, k, true);
+    const ok = k => (!only || only === k) && insWants(isl, b, k) && give(isl, b, fx, fy, k, true);
     if (src.type === 'cinta') {
       const it = src.items[0];
       if (it && it.p >= 0.7 && ok(it.t)) { src.items.shift(); return it.t; }
@@ -751,7 +773,8 @@
       } else if (kb === 'clasificador') {
         s += `Sigue derecho: <b>${b.filter ? D.RES[b.filter].n : 'todo'}</b><br>El resto sale por los costados.<br><i>Clic para elegir.</i>`;
       } else if (kb === 'insertador') {
-        s += `Agarra: <b>${b.filter ? D.RES[b.filter].n : 'cualquier cosa'}</b>` + (b.hand ? `<br>Lleva: ${D.RES[b.hand].n} ×${b.handN || 1}` : '') +
+        const what = b.filter === Isl.INS_NONE ? 'nada (está parado)' : b.filter === Isl.INS_TECH ? 'lo que pide la investigación' : b.filter ? D.RES[b.filter].n : 'cualquier cosa';
+        s += `Agarra: <b>${what}</b>` + (b.hand ? `<br>Lleva: ${D.RES[b.hand].n} ×${b.handN || 1}` : '') +
           `<br>${(INS_T / PV.Tech.fx('ins')).toFixed(2)} s por viaje · hasta ${1 + PV.Tech.fx('carry')} por vez<br><i>Clic para filtrar.</i>`;
       } else if (D.PRODUCE[b.type]) {
         const pr = D.PRODUCE[b.type];
@@ -1218,7 +1241,16 @@
       const x = cx + dx * f * T * 0.6, y = cy + dy * f * T * 0.6;
       drawPerson(ctx, x, y, b.dir * Math.PI / 2, '#2f4f6f', b.hand ? t * 9 : 0, '#7a1f1f');
       if (b.hand) drawBundle(ctx, x, y, b.hand, 4);
-      if (b.filter) { ctx.fillStyle = D.RES[b.filter].c; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.arc(px + 6, py + 6, 3.5, 0, TAU); ctx.fill(); ctx.stroke(); }
+      if (b.filter === Isl.INS_NONE) {
+        // Parado: una cruz roja en la esquina.
+        ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(px + 3, py + 3); ctx.lineTo(px + 10, py + 10); ctx.moveTo(px + 10, py + 3); ctx.lineTo(px + 3, py + 10); ctx.stroke();
+      } else if (b.filter === Isl.INS_TECH) {
+        // Lleva lo de la investigación: un rollito de mapa celeste.
+        ctx.fillStyle = '#5dade2'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(px + 6, py + 6, 3.5, 0, TAU); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.fillRect(px + 4.5, py + 5.3, 3, 1.4);
+      } else if (b.filter) { ctx.fillStyle = D.RES[b.filter].c; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.arc(px + 6, py + 6, 3.5, 0, TAU); ctx.fill(); ctx.stroke(); }
     }
     if (!NO_ARROW.includes(D.base(b.type))) drawArrow(ctx, b);
     if (b.broken) drawBroken(ctx, b, t);

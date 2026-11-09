@@ -7,6 +7,7 @@
       '🧭 El mar ahora tiene <b>5 zonas</b>, cada una con su color: Aguas Mansas, Mar de las Brumas, Costa de las Especias, Arrecifes de Coral y Mar de Ceniza.',
       '⚓ Hay <b>8 puertos</b> (antes 3). Cada zona vende lo suyo barato, paga bien lo que le falta y no compra algunas cosas: llevá mercancía de un mar a otro para ganar más.',
       '📦 Lo que vende un puerto se acaba y se repone de a poco. Raciones, ron y balas se consiguen en todos.',
+      '💪 Estibador: nueva opción <b>⛔ Nada</b> para dejarlo parado. Y con la investigación <b>Estibadores con lista</b>, la opción <b>🔬 Lo que pide la investigación</b>: saca del almacén solo lo que le falta a la investigación de ahora.',
       '🎵 Música de fondo tranquila, con olas. Se apaga con el botón 🔊 de abajo a la derecha.',
       '🐛 Arreglado: las minas profundas, el campamento maderero, el alto horno y los demás edificios grandes (y también la pesquería y la cocina) no sacaban nada por la flecha. Ahora entregan a cualquiera de las dos casillas de adelante.',
       '🐛 Arreglado: después de la primera noche los pescadores, los que cosechan caña, los mineros y demás trabajadores se quedaban quietos.',
