@@ -18,25 +18,13 @@
   const Cloud = { user: null, ready: false, status: '' };
   let fb = null, auth = null, db = null, lastUp = 0, pending = false, timer = null, busy = false;
 
-  // ---------- Compresión (la partida entra holgada en un documento de Firestore) ----------
-  async function pack(str) {
-    const s = new Blob([str]).stream().pipeThrough(new CompressionStream('gzip'));
-    const buf = new Uint8Array(await new Response(s).arrayBuffer());
-    let bin = '';
-    for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
-    return btoa(bin);
-  }
-  async function unpack(b64) {
-    const bin = atob(b64), buf = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-    const s = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
-    return new Response(s).text();
-  }
+  const pack = s => PV.Transfer.pack(s), unpack = s => PV.Transfer.unpack(s);
 
   function setStatus(s) { Cloud.status = s; PV.UI.cloudChanged && PV.UI.cloudChanged(); }
 
   // ---------- Inicio ----------
   Cloud.init = async function () {
+    if (!PV.Transfer.isWeb()) return; // en el artifact de Claude no hay nube: se usa exportar/importar
     try {
       const [app, a, f] = await Promise.all([
         import(SDK + 'firebase-app.js'), import(SDK + 'firebase-auth.js'), import(SDK + 'firebase-firestore.js'),

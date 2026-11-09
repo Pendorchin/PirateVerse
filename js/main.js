@@ -112,6 +112,7 @@
   }
 
   PV.UI.init();
+  PV.Transfer.init();
   PV.Cloud.init();
   PV.UI.onScene('menu');
   requestAnimationFrame(frame);

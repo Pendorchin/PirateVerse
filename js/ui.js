@@ -21,7 +21,8 @@
     const C = PV.Cloud, box = $('cloudBox');
     if (!box) return;
     const st = C.status ? `<div class="cloud-st">${C.status}</div>` : '';
-    if (!C.ready) box.innerHTML = st || '<div class="cloud-st">Conectando con la nube…</div>';
+    if (!PV.Transfer.isWeb()) box.innerHTML = '';
+    else if (!C.ready) box.innerHTML = st || '<div class="cloud-st">Conectando con la nube…</div>';
     else if (!C.user) box.innerHTML = `<button data-cloud="in">☁️ Iniciar sesión con Google</button><div class="cloud-st">Para tener la misma partida en cualquier compu.</div>${st}`;
     else box.innerHTML = `<div class="cloud-st">☁️ Conectado como <b>${String(C.user.name).replace(/[<>&"]/g, c => '&#' + c.charCodeAt(0) + ';')}</b> · <a href="#" data-cloud="out" role="button">cerrar sesión</a></div>${st}`;
     box.querySelectorAll('a[data-cloud]').forEach(a => a.onclick = e => { e.preventDefault(); PV.Cloud.signOut(); });
@@ -124,6 +125,8 @@
   UI.onScene = function (s) {
     const show = (id, on) => $(id).classList.toggle('hidden', !on);
     show('menu', s === 'menu');
+    show('moveBanner', s === 'menu' && !PV.Transfer.isWeb()); // cartel de mudanza solo en el menú del artifact
+    if (s !== 'menu') PV.Transfer.close();
     show('hud', s === 'sea' || s === 'port');
     show('prompt', false);
     show('help', s !== 'menu');

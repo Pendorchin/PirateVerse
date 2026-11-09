@@ -258,3 +258,25 @@ body:has(#raidBanner:not(.hidden)) #toasts { top: 88px !important; }
 #cloudBox button { display: block; margin: 0 auto 6px; width: 260px; font-size: 16px; padding: 8px; }
 #cloudBox .cloud-st { font-size: 13px; color: #f8e9c6; opacity: .85; margin-top: 4px; }
 #cloudBox a { color: var(--gold); }
+
+/* Exportar / importar partida */
+#saveRow { display: flex; gap: 8px; justify-content: center; margin: 10px auto 0; flex-wrap: wrap; }
+#saveRow button { font-size: 14px; padding: 6px 10px; }
+#savePanel { position: fixed; z-index: 60; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; padding: 18px 20px; user-select: text; }
+#savePanel h2 { margin: 0 0 8px; font-family: 'Pirata One', Georgia, serif; font-weight: normal; font-size: 30px; }
+#savePanel p { margin: 6px 0; }
+#savePanel .x { position: absolute; top: 8px; right: 8px; padding: 2px 8px; }
+#savePanel textarea { width: 100%; height: 110px; font: 12px/1.3 monospace; resize: vertical; word-break: break-all; }
+#savePanel .row { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+#savePanel .row > * { flex: 1; }
+#savePanel .filebtn { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid var(--wood); border-radius: 6px; padding: 6px 10px; background: var(--parch-dark); }
+#savePanel .filebtn input { display: none; }
+#savePanel details { margin-top: 8px; }
+#savePanel summary { cursor: pointer; font-weight: bold; }
+.howto { margin: 8px 0; padding-left: 22px; line-height: 1.5; }
+.howto li { margin-bottom: 4px; }
+.sv-msg { min-height: 18px; font-size: 14px; }
+.sv-msg.good { color: var(--good); } .sv-msg.bad { color: var(--bad); }
+#moveBanner { position: fixed; z-index: 55; top: 0; left: 0; right: 0; padding: 8px 16px; text-align: center; background: #3b2410; color: #f8e9c6; font-size: 15px; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+#moveBanner a { color: var(--gold); }
+#moveBanner button { margin-left: 8px; font-size: 13px; padding: 3px 8px; }
