@@ -15,6 +15,7 @@
   <div id="prompt" class="hidden"></div>
   <div id="help" class="hidden"></div>
   <div id="quest" class="panel hidden"></div>
+  <button id="musicBtn" title="Música (prender o apagar)">🔊</button>
   <button id="tutBtn" class="hidden" title="Volver a mostrar el tutorial">🧔 Contramaestre</button>
 
   <div id="islandPanel" class="panel hidden">
@@ -56,6 +57,7 @@
       <button id="btnContinue">Continuar partida</button>
       <div id="cloudBox"></div>
       <div id="saveRow"><button data-sv="export">📤 Exportar</button><button data-sv="import">📥 Importar</button><button data-sv="howto">🧭 Pasar mi partida</button></div>
+      <div id="newsBox"></div>
       <div class="controls">
         <div><b>En el mar</b><br><kbd>W</kbd><kbd>S</kbd> velas · <kbd>A</kbd><kbd>D</kbd> timón<br><kbd>Q</kbd> babor · <kbd>E</kbd> estribor (cañones)<br><kbd>F</kbd> interactuar · rueda zoom</div>
         <div><b>En la isla</b><br><kbd>1</kbd>–<kbd>0</kbd> edificios · <kbd>M</kbd> muelle · <kbd>C</kbd> cartógrafo · <kbd>B</kbd> banquero · <kbd>R</kbd> rotar<br><kbd>P</kbd> <kbd>U</kbd> <kbd>O</kbd> <kbd>L</kbd> <kbd>T</kbd> comida y ron · <kbd>I</kbd> investigación · <kbd>G</kbd> <kbd>H</kbd> <kbd>J</kbd> <kbd>K</kbd> defensas<br>Clic: construir (arrastrá senderos)<br>Clic derecho: quitar · <kbd>WASD</kbd> cámara</div>
@@ -77,11 +79,13 @@
   <script src="js/bank.js"></script>
   <script src="js/raid.js"></script>
   <script src="js/colony.js"></script>
+  <script src="js/music.js"></script>
   <script src="js/save.js"></script>
   <script src="js/transfer.js"></script>
   <script src="js/cloud.js"></script>
   <script src="js/tutorial.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/news.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

@@ -1,19 +1,28 @@
 // Puertos: mercado con precios dinámicos, astillero (mejoras) y reparación.
 (function (PV) {
   'use strict';
-  const U = PV.U, D = PV.D;
+  const U = PV.U, D = PV.D, Wd = PV.World;
   const Port = { isl: null, tab: 'mercado' };
+
+  Port.refuses = (isl, k) => Wd.zone(isl).refuses.includes(k);
+  const names = ks => ks.map(k => D.RES[k].n.toLowerCase()).join(', ');
+  Port.names = names;
+  Port.zoneLine = isl => {
+    const Z = Wd.zone(isl);
+    return `Vende ${names(Z.goods)}. Paga bien ${names(Z.wants)}.${Z.refuses.length ? ' No compra ' + names(Z.refuses) + '.' : ''}`;
+  };
 
   Port.sellPrice = (isl, k) => Math.max(1, Math.round(D.RES[k].p * isl.market[k].m * isl.market[k].f * PV.Tech.fx('sell')));
   Port.buyPrice = (isl, k) => Math.max(2, Math.round(D.RES[k].p * isl.market[k].m * isl.market[k].f * 1.35));
 
-  // Los precios vuelven de a poco a su valor normal.
+  // Los precios vuelven de a poco a su valor normal y lo que vende el puerto se repone (lleno en ~5 minutos).
   Port.update = function (dt) {
     for (const isl of PV.state.islands) {
       if (!isl.port) continue;
       for (const k in isl.market) {
         const m = isl.market[k];
         m.f += (1 - m.f) * Math.min(1, dt * 0.01);
+        if (m.s !== undefined) { const mx = Wd.stockMax(k); m.s = Math.min(mx, m.s + (mx / 300) * dt); }
       }
     }
   };
@@ -34,6 +43,7 @@
 
   function sell(k, n) {
     const S = PV.state, isl = Port.isl, m = isl.market[k];
+    if (Port.refuses(isl, k)) return PV.UI.toast(`En ${isl.name} no compran ${D.RES[k].n.toLowerCase()}.`, 'bad');
     let got = 0, sold = 0;
     while (n-- > 0 && S.ship.cargo[k] > 0) {
       got += Port.sellPrice(isl, k);
@@ -51,18 +61,21 @@
   function sellCargo() {
     const S = PV.state, cargo = S.ship.cargo, keep = {};
     for (const k of AMMO_KEYS) if (cargo[k]) { keep[k] = cargo[k]; delete cargo[k]; }
-    const n = PV.Inv.sum(cargo);
+    const n0 = PV.Inv.sum(cargo);
     const got = Port.sellAll(Port.isl, cargo);
-    Object.assign(cargo, keep);
+    const left = Object.keys(cargo), n = n0 - PV.Inv.sum(cargo);
+    for (const k in keep) cargo[k] = (cargo[k] || 0) + keep[k];
+    if (left.length) PV.UI.toast(`Acá no compran ${names(left)}: quedó en la bodega.`, 'bad');
     S.doblones += got;
     S.sold = (S.sold || 0) + n;
     if (n) PV.UI.toast(`Vendiste ${n} unidades por ${got} doblones`, 'good');
   }
 
-  // Venta automática de una bodega entera (la usan los mercantes).
+  // Venta automática de una bodega entera (la usan los mercantes). Lo que el puerto no compra queda en la bodega.
   Port.sellAll = function (isl, cargo) {
     let got = 0;
     for (const k of Object.keys(cargo)) {
+      if (Port.refuses(isl, k)) continue;
       const m = isl.market[k];
       for (let i = cargo[k]; i > 0; i--) { got += Port.sellPrice(isl, k); m.f = Math.max(0.3, m.f * 0.985); }
       delete cargo[k];
@@ -72,12 +85,14 @@
 
   function buy(k, n) {
     const S = PV.state, isl = Port.isl, m = isl.market[k];
+    if (m.s === undefined) return PV.UI.toast(`En ${isl.name} no venden ${D.RES[k].n.toLowerCase()}.`, 'bad');
     let spent = 0, bought = 0;
     while (n-- > 0) {
+      if (m.s < 1) { PV.UI.toast(`No les queda ${D.RES[k].n.toLowerCase()}: se repone con el tiempo.`, 'bad'); break; }
       const p = Port.buyPrice(isl, k);
       if (S.doblones < p) { if (!bought) PV.UI.toast('No te alcanzan los doblones.', 'bad'); break; }
       if (!PV.Inv.addCargo(k, 1)) { PV.UI.toast('La bodega está llena.', 'bad'); break; }
-      S.doblones -= p; spent += p; bought++;
+      S.doblones -= p; spent += p; bought++; m.s--;
       m.f = Math.min(3, m.f * 1.03);
     }
     if (bought) PV.UI.toast(`Compraste ${bought} ${D.RES[k].n} por ${spent} doblones`, 'good');
@@ -164,24 +179,33 @@
 
   function marketHtml() {
     const S = PV.state, isl = Port.isl, cargo = S.ship.cargo;
-    const keys = Object.keys(D.RES).sort((a, b) => (cargo[b] || 0) - (cargo[a] || 0));
+    const Z = Wd.zone(isl);
+    // Se muestra lo que llevás, lo que vende el puerto y lo que busca.
+    const rank = k => (cargo[k] ? 0 : Z.goods.includes(k) ? 1 : Z.wants.includes(k) ? 2 : 3);
+    const keys = Object.keys(D.RES).filter(k => cargo[k] || isl.market[k].s !== undefined || Z.wants.includes(k))
+      .sort((a, b) => rank(a) - rank(b) || (cargo[b] || 0) - (cargo[a] || 0));
     const rows = keys.map(k => {
-      const have = cargo[k] || 0, m = isl.market[k], rel = m.m * m.f;
-      const trend = rel > 1.12 ? '<span class="up">▲ paga bien</span>' : rel < 0.88 ? '<span class="down">▼ barato</span>' : '';
+      const have = cargo[k] || 0, m = isl.market[k], no = Port.refuses(isl, k), sale = m.s !== undefined;
+      const tag = no ? '<span class="down">✖ no lo compran</span>'
+        : Z.wants.includes(k) ? '<span class="up">▲ lo buscan</span>'
+        : Z.goods.includes(k) ? '<span class="local">⚓ de la zona</span>'
+        : m.f < 0.8 ? '<span class="down">▼ saturado</span>' : '';
+      const stock = sale ? Math.floor(m.s) : 0;
       return `<tr>
-        <td><i class="dot" style="background:${D.RES[k].c}"></i> ${D.RES[k].n} ${trend}</td>
+        <td><i class="dot" style="background:${D.RES[k].c}"></i> ${D.RES[k].n} ${tag}</td>
         <td>${have}</td>
-        <td>${Port.sellPrice(isl, k)} <i class="coin"></i></td>
-        <td><button data-act="sell" data-k="${k}" data-n="1" ${have ? '' : 'disabled'}>Vender 1</button><button data-act="sell" data-k="${k}" data-n="9999" ${have ? '' : 'disabled'}>Todo</button></td>
-        <td>${Port.buyPrice(isl, k)} <i class="coin"></i></td>
-        <td><button data-act="buy" data-k="${k}" data-n="1">Comprar 1</button><button data-act="buy" data-k="${k}" data-n="10">10</button></td>
+        <td>${no ? '—' : Port.sellPrice(isl, k) + ' <i class="coin"></i>'}</td>
+        <td><button data-act="sell" data-k="${k}" data-n="1" ${have && !no ? '' : 'disabled'}>Vender 1</button><button data-act="sell" data-k="${k}" data-n="9999" ${have && !no ? '' : 'disabled'}>Todo</button></td>
+        <td>${sale ? `${Port.buyPrice(isl, k)} <i class="coin"></i> <small class="muted">(quedan ${stock})</small>` : '<span class="muted">no venden</span>'}</td>
+        <td>${sale ? `<button data-act="buy" data-k="${k}" data-n="1" ${stock ? '' : 'disabled'}>Comprar 1</button><button data-act="buy" data-k="${k}" data-n="10" ${stock ? '' : 'disabled'}>10</button>` : ''}</td>
       </tr>`;
     }).join('');
     const sellable = Object.keys(cargo).filter(k => !AMMO_KEYS.includes(k));
     const est = sellable.reduce((t, k) => t + Port.sellPrice(isl, k) * cargo[k], 0);
     return `<div class="sellall"><button class="primary" data-act="sellall" ${sellable.length ? '' : 'disabled'}>Vender toda la bodega</button>
         <span class="muted">${sellable.length ? `≈ ${U.fmt(est)} <i class="coin"></i> · la munición no se vende` : 'No hay nada para vender.'}</span></div>
-      <p class="muted">Cada puerto paga distinto. Si vendés mucho de algo, el precio baja (y se recupera con el tiempo).</p>
+      <p class="zoneinfo">🧭 <b>${Z.n}:</b> ${Port.zoneLine(isl)}</p>
+      <p class="muted">Lo de la zona sale barato acá y se paga bien en otros mares. Si vendés mucho de algo, el precio baja (y se recupera con el tiempo). Lo que venden se repone de a poco.</p>
       <table class="market"><tr><th>Recurso</th><th>En bodega</th><th>Te pagan</th><th></th><th>Cuesta</th><th></th></tr>${rows}</table>`;
   }
 
@@ -220,7 +244,8 @@
   function fleetHtml() {
     const L = PV.Fleet.list(), M = D.MERCHANT, isl = id => PV.state.islands[id];
     const rows = L.map((m, i) => `<div class="fleet"><img src="${PV.Spr.src('barco_mercante')}" alt="">
-      <div><h4 style="margin:0">${m.name}</h4><div class="sub">${isl(m.home).name} → ${isl(m.port).name}</div>
+      <div><h4 style="margin:0">${m.name}</h4><div class="sub">${isl(m.home).name} → ${isl(m.port).name} <span class="muted">(${Wd.zone(isl(m.port)).n})</span></div>
+        <div class="sub muted">Paga bien ${names(Wd.zone(isl(m.port)).wants)}${Wd.zone(isl(m.port)).refuses.length ? ' · no compra ' + names(Wd.zone(isl(m.port)).refuses) : ''}</div>
         <div class="sub">${PV.Fleet.status(m)} · ganó ${U.fmt(m.earned)} <i class="coin"></i></div></div>
       <div style="display:flex;flex-direction:column;gap:4px">
         <button data-act="fhome" data-i="${i}">Cambiar isla</button><button data-act="fport" data-i="${i}">Cambiar puerto</button></div></div>`).join('');
@@ -248,7 +273,7 @@
     const tab = (id, label) => `<button data-act="tab" data-tab="${id}" class="${Port.tab === id ? 'on' : ''}">${label}</button>`;
     const body = Port.tab === 'mercado' ? marketHtml() : Port.tab === 'astillero' ? shipyardHtml() : Port.tab === 'flota' ? fleetHtml() : repairHtml();
     el.innerHTML = `
-      <div class="ph"><h2>⚓ ${isl.name}</h2>
+      <div class="ph"><h2>⚓ ${isl.name} <small class="muted">· ${Wd.zone(isl).n}</small></h2>
         <div><i class="coin"></i> <b>${U.fmt(S.doblones)}</b> · <i class="crate"></i> ${PV.Inv.cargoTotal()}/${PV.Inv.cargoCap()}</div>
         <button class="primary" data-act="close">⛵ Zarpar (Esc)</button></div>
       <div class="tabs">${tab('mercado', '🪙 Mercado')}${tab('astillero', '🔨 Astillero')}${tab('flota', '⛵ Flota')}${tab('reparar', '🩹 Reparar')}</div>

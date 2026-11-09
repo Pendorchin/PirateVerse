@@ -194,7 +194,8 @@
     day: 360, night: 120, fade: 20,
     crew: { extractor: 2, lenadores: 2, aserradero: 2, fundicion: 2, herreria: 2, taller: 2, cartografo: 1, pesqueria: 1, canaveral: 2, cocina: 1, destileria: 2 },
     food: ['pesqueria', 'canaveral', 'cocina', 'destileria'],
-    ronPer: 0.5, anejo: 0.1, // el ron añejo cuenta como ron y además sube la moral seats: 20, tavernMax: 40, strike: 0.2,
+    ronPer: 0.5, anejo: 0.1, // el ron añejo cuenta como ron y además sube la moral
+    seats: 20, tavernMax: 40, strike: 0.2,
     ship: { raciones: 2, ron: 1 }, merchant: { raciones: 1, ron: 1 },
     start: { raciones: 30, ron: 15 }, shipStart: { raciones: 6, ron: 3 },
   };
@@ -320,7 +321,24 @@
     'de la Serpiente', 'del Faro', 'de Sal', 'del Ocaso', 'de los Muertos',
   ];
   D.ISLAND_PRE = ['Isla', 'Cayo', 'Atolón', 'Islote', 'Peñón'];
-  D.PORT_NAMES = ['Puerto Esperanza', 'Bahía del Contrabandista', 'Fuerte San Telmo'];
+
+  // Zonas del mar: cada una produce sus mercancías (sus puertos las venden y se reponen),
+  // paga bien lo que le falta y no compra algunas cosas. Comerciar entre zonas deja ganancia.
+  // c: color del agua, mc: color en el minimapa, ports: nombres de sus puertos.
+  D.ZONES = {
+    mansas:   { n: 'Aguas Mansas',          c: '#14507a', mc: '#1b5a85', ports: ['Puerto Esperanza'],
+                goods: ['madera', 'piedra', 'cobre', 'tablones', 'pescado'], wants: ['especias', 'algodon', 'ron_anejo'], refuses: [] },
+    brumas:   { n: 'Mar de las Brumas',     c: '#24506a', mc: '#33657f', ports: ['Puerto Niebla', 'Fuerte San Telmo'],
+                goods: ['hierro', 'carbon', 'estano', 'lingote_hierro'], wants: ['ron', 'cana', 'raciones', 'lona'], refuses: ['pescado', 'coral'] },
+    especias: { n: 'Costa de las Especias', c: '#12627c', mc: '#1a7894', ports: ['Puerto Canela', 'Bahía de la Pimienta'],
+                goods: ['especias', 'algodon', 'cana_fina', 'lona'], wants: ['lingote_hierro', 'placa_hierro', 'polvora', 'lingote_plata'], refuses: ['cana', 'madera'] },
+    coral:    { n: 'Arrecifes de Coral',    c: '#0f6a82', mc: '#178299', ports: ['Puerto Perla', 'Caleta de Nácar'],
+                goods: ['coral', 'pescado', 'gemas'], wants: ['tablones', 'raciones', 'velamen', 'ron'], refuses: ['piedra', 'carbon'] },
+    volcan:   { n: 'Mar de Ceniza',         c: '#2c4358', mc: '#3b5670', ports: ['Puerto Ceniza', 'Bahía del Contrabandista'],
+                goods: ['azufre', 'polvora', 'carbon', 'plata'], wants: ['especias', 'ron_anejo', 'tablones', 'lingote_cobre'], refuses: ['algodon', 'lona'] },
+  };
+  // Lo básico para la tripulación y los cañones se vende en todos los puertos.
+  D.PORT_BASICS = ['raciones', 'ron', 'balas'];
 
   PV.D = D;
 })(window.PV);

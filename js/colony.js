@@ -22,7 +22,12 @@
   };
 
   // ---------- Trabajadores ----------
-  Col.st = isl => isl.col || (isl.col = { mor: 1, mul: 1, fed: 1, ron: 1, rest: 1, strike: false });
+  Col.st = function (isl) {
+    const c = isl.col || (isl.col = { mor: 1, mul: 1, fed: 1, ron: 1, rest: 1, strike: false });
+    // Partidas con un error viejo guardaron números rotos (null): se arreglan solos.
+    for (const k of ['mor', 'mul', 'fed', 'ron', 'rest']) if (!Number.isFinite(c[k])) c[k] = 1;
+    return c;
+  };
   Col.crewOf = b => (C.crew[D.base(b.type)] || 0) * (D.BUILD[b.type].of ? 2 : 1);
   Col.isWorker = b => !!C.crew[D.base(b.type)];
   Col.isFood = b => C.food.includes(D.base(b.type));

@@ -43,14 +43,86 @@
     }
   }
 
-  W.generate = function (seed) {
-    const r = U.rng(seed);
-    const C = W.SIZE / 2;
-    const islands = [];
-    const names = U.shuffle(r, D.ISLAND_NAMES.slice());
-    let ni = 0;
+  // ---------- Zonas del mar ----------
+  // Un círculo de aguas mansas en el centro y cuatro mares alrededor (este, sur, oeste, norte),
+  // con bordes ondulados para que no parezcan una cuadrícula.
+  const OUTER = ['especias', 'coral', 'volcan', 'brumas'];
+  W.innerR = a => 1400 + 160 * Math.sin(3 * a + 0.7);
+  const bend = d => 0.18 * Math.sin(d / 450);
+  W.zoneAt = function (x, y) {
+    const C = W.SIZE / 2, dx = x - C, dy = y - C, d = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
+    if (d < W.innerR(a)) return 'mansas';
+    const s = Math.round((a + bend(d)) / (Math.PI / 2));
+    return OUTER[((s % 4) + 4) % 4];
+  };
+  W.zone = isl => D.ZONES[isl.zone || W.zoneAt(isl.x, isl.y)];
 
-    function add(o) {
+  // Formas para dibujar las zonas en el mar (se calculan una sola vez).
+  let shapes = null;
+  W.zoneShapes = function () {
+    if (shapes) return shapes;
+    const C = W.SIZE / 2, Q = Math.PI / 2;
+    const pt = (d, a) => [C + Math.cos(a) * d, C + Math.sin(a) * d];
+    const curve = (b, from, to, step) => {
+      const out = [];
+      for (let d = from; step > 0 ? d <= to : d >= to; d += step) out.push(pt(d, b - bend(d)));
+      return out;
+    };
+    shapes = { outer: [], lines: [] };
+    OUTER.forEach((k, s) => {
+      const p = new Path2D();
+      const pts = curve(s * Q - Q / 2, 900, 5200, 60).concat(curve(s * Q + Q / 2, 5200, 900, -60));
+      pts.forEach(([x, y], i) => (i ? p.lineTo(x, y) : p.moveTo(x, y)));
+      p.closePath();
+      shapes.outer.push({ k, p });
+      // Borde entre dos mares, desde donde termina el círculo del centro.
+      const l = new Path2D();
+      let started = false;
+      for (const [x, y] of curve(s * Q - Q / 2, 900, 5200, 40)) {
+        if (W.zoneAt(x, y) === 'mansas') continue;
+        started ? l.lineTo(x, y) : l.moveTo(x, y);
+        started = true;
+      }
+      shapes.lines.push(l);
+    });
+    const m = new Path2D();
+    for (let i = 0; i <= 160; i++) {
+      const a = (i / 160) * TAU, [x, y] = pt(W.innerR(a), a);
+      i ? m.lineTo(x, y) : m.moveTo(x, y);
+    }
+    m.closePath();
+    shapes.inner = m;
+    return shapes;
+  };
+
+  // Zona de cada casilla de niebla (para el minimapa).
+  let zgrid = null;
+  W.zoneGrid = function () {
+    if (zgrid) return zgrid;
+    zgrid = [];
+    for (let j = 0; j < W.FOG_N; j++) for (let i = 0; i < W.FOG_N; i++) zgrid.push(W.zoneAt((i + 0.5) * W.FOG_CELL, (j + 0.5) * W.FOG_CELL));
+    return zgrid;
+  };
+
+  // ---------- Mercado de un puerto según su zona ----------
+  W.isBasic = k => D.PORT_BASICS.includes(k);
+  W.forSale = (isl, k) => W.isBasic(k) || W.zone(isl).goods.includes(k);
+  W.stockMax = k => (W.isBasic(k) ? 40 : U.clamp(Math.round(500 / D.RES[k].p), 15, 120));
+  W.setupMarket = function (isl, r) {
+    isl.zone = W.zoneAt(isl.x, isl.y);
+    const Z = D.ZONES[isl.zone], old = isl.market || {};
+    isl.market = {};
+    for (const k in D.RES) {
+      const m = Z.goods.includes(k) ? U.range(r, 0.55, 0.7)
+        : Z.wants.includes(k) ? U.range(r, 1.5, 1.8)
+        : W.isBasic(k) ? 1 : U.range(r, 0.85, 1.15);
+      isl.market[k] = { m, f: old[k] ? old[k].f : 1 };
+      if (W.forSale(isl, k)) isl.market[k].s = W.stockMax(k);
+    }
+  };
+
+  // ---------- Islas ----------
+  function addIsland(islands, r, o) {
       o.id = islands.length;
       o.sh = [r() * TAU, r() * TAU, r() * TAU, U.range(r, 0.08, 0.2), U.range(r, 0.04, 0.1)];
       o.owned = !!o.owned;
@@ -67,30 +139,59 @@
         const hp = W.towerHp(o.tier);
         o.towers.push({ x: o.x + Math.cos(a) * rr, y: o.y + Math.sin(a) * rr, hp, max: hp, cd: r() * 2 });
       }
-      if (o.port) {
-        o.market = {};
-        for (const k in D.RES) o.market[k] = { m: U.range(r, 0.75, 1.35), f: 1 };
-      }
+      if (o.port) W.setupMarket(o, r);
       islands.push(o);
       return o;
-    }
+  }
 
-    function free(x, y, R) {
-      if (x < R + 300 || y < R + 300 || x > W.SIZE - R - 300 || y > W.SIZE - R - 300) return false;
-      for (const o of islands) if (U.dist(x, y, o.x, o.y) < R * 1.3 + o.R * 1.3 + 220) return false;
-      return true;
-    }
+  function freeSpot(islands, x, y, R) {
+    if (x < R + 300 || y < R + 300 || x > W.SIZE - R - 300 || y > W.SIZE - R - 300) return false;
+    for (const o of islands) if (U.dist(x, y, o.x, o.y) < R * 1.3 + o.R * 1.3 + 220) return false;
+    return true;
+  }
 
-    add({ x: C, y: C, R: 150, tier: 1, home: true, owned: true, name: 'Isla Refugio' });
-
-    const portDist = [700, 1550, 2500];
-    for (let i = 0; i < portDist.length; i++) {
-      for (let t = 0; t < 300; t++) {
-        const a = r() * TAU;
-        const x = C + Math.cos(a) * portDist[i], y = C + Math.sin(a) * portDist[i];
-        if (free(x, y, 110)) { add({ x, y, R: 110, tier: 1, port: true, name: D.PORT_NAMES[i] }); break; }
+  // Unos 8 puertos: uno cerca del inicio, uno en cada mar y otros tres más lejos.
+  // Sirve para partidas nuevas y para sumar los que faltan en partidas viejas.
+  W.addPorts = function (islands, r) {
+    const need = { mansas: 1 };
+    for (const k of OUTER) need[k] = 1;
+    for (const k of U.shuffle(r, OUTER.slice()).slice(0, 3)) need[k]++;
+    const have = {};
+    for (const o of islands) if (o.port) { const z = W.zoneAt(o.x, o.y); have[z] = (have[z] || 0) + 1; }
+    const used = new Set(islands.filter(o => o.port).map(o => o.name));
+    const C = W.SIZE / 2, Q = Math.PI / 2;
+    let added = 0;
+    for (const z in need) {
+      for (let n = have[z] || 0; n < need[z]; n++) {
+        const ring = z === 'mansas' ? [650, 950] : n === 0 ? [1800, 2300] : [2650, 3050];
+        const mid = z === 'mansas' ? null : OUTER.indexOf(z) * Q;
+        for (let t = 0; t < 400; t++) {
+          const a = mid === null ? r() * TAU : mid + U.range(r, -0.55, 0.55), d = U.range(r, ring[0], ring[1]);
+          const x = C + Math.cos(a) * d, y = C + Math.sin(a) * d;
+          if (W.zoneAt(x, y) !== z || !freeSpot(islands, x, y, 110)) continue;
+          const spare = ['Caleta Escondida', 'Fuerte Corsario', 'Puerto Gaviota', 'Bahía de los Náufragos'];
+          const name = D.ZONES[z].ports.concat(spare).find(p => !used.has(p)) || 'Puerto ' + (islands.length + 1);
+          used.add(name);
+          addIsland(islands, r, { x, y, R: 110, tier: 1, port: true, name });
+          added++;
+          break;
+        }
       }
     }
+    return added;
+  };
+
+  W.generate = function (seed) {
+    const r = U.rng(seed);
+    const C = W.SIZE / 2;
+    const islands = [];
+    const names = U.shuffle(r, D.ISLAND_NAMES.slice());
+    let ni = 0;
+    const add = o => addIsland(islands, r, o);
+    const free = (x, y, R) => freeSpot(islands, x, y, R);
+
+    add({ x: C, y: C, R: 150, tier: 1, home: true, owned: true, name: 'Isla Refugio' });
+    W.addPorts(islands, r);
 
     // Primero se ubican las islas y después se reparte el nivel según la distancia al inicio,
     // así siempre hay varias comunes cerca y pocas legendarias lejos.

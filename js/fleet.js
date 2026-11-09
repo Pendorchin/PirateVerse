@@ -77,7 +77,11 @@
     for (const m of Fleet.list()) {
       const H = islandOf(m.home), P = islandOf(m.port);
       if (m.st === 'toHome') {
-        if (sail(m, H, dt)) { m.st = 'load'; m.wait = 0; }
+        if (sail(m, H, dt)) {
+          // Lo que el puerto no quiso comprar vuelve al almacén de la isla.
+          for (const k of Object.keys(m.cargo)) { PV.Inv.add(H.storage, k, m.cargo[k]); delete m.cargo[k]; }
+          m.st = 'load'; m.wait = 0;
+        }
       } else if (m.st === 'load') {
         m.v = U.lerp(m.v, 0, Math.min(1, dt * 2));
         m.wait += dt;
@@ -87,6 +91,8 @@
       } else if (m.st === 'toPort') {
         if (sail(m, P, dt)) {
           let got = PV.Port.sellAll(P, m.cargo);
+          const left = Object.keys(m.cargo);
+          if (left.length) PV.UI.toast(`⛵ En ${P.name} no compran ${PV.Port.names(left)}: ${m.name} lo trae de vuelta. Probá con otro puerto.`, 'bad');
           // Lo que no consiguió de provisiones en la isla lo compra en el puerto.
           let paid = 0;
           for (const k in m.owe || {}) paid += m.owe[k] * PV.Port.buyPrice(P, k);

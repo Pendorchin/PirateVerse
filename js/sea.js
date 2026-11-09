@@ -29,7 +29,17 @@
     const sh = PV.state.ship;
     sh.rl = 0; sh.rr = 0; sh.sunk = 0;
     reveal(sh.x, sh.y, REVEAL);
+    Sea.zoneK = Wd.zoneAt(sh.x, sh.y);
   };
+
+  // Al cruzar a otro mar, un aviso con lo que se vende y se paga bien ahí.
+  function checkZone(sh) {
+    const k = Wd.zoneAt(sh.x, sh.y);
+    if (k === Sea.zoneK) return;
+    Sea.zoneK = k;
+    const Z = D.ZONES[k];
+    PV.UI.toast(`🧭 Entrás en ${Z.n}. Sus puertos venden ${PV.Port.names(Z.goods)} y pagan bien ${PV.Port.names(Z.wants)}.`);
+  }
 
   function spawnGuard(isl, ang) {
     const t = isl.tier, pr = isl.R + 190, hp = 40 + t * 35;
@@ -261,6 +271,7 @@
         puff(sh.x - Math.cos(sh.a) * 24, sh.y - Math.sin(sh.a) * 24, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, 'rgba(255,255,255,0.5)', 1.2, 3 + Math.random() * 3);
       }
       reveal(sh.x, sh.y, REVEAL);
+      checkZone(sh);
 
       // Reparación lenta cerca de islas propias.
       for (const isl of S.islands) {
@@ -570,7 +581,7 @@
     ctx.strokeText(isl.name, isl.x, y);
     ctx.fillStyle = '#fff8e1'; ctx.fillText(isl.name, isl.x, y);
     ctx.font = '13px Georgia';
-    const sub = isl.port ? '⚓ Puerto' : '★'.repeat(isl.tier) + ' ' + D.TIERS[isl.tier].n + (isl.owned ? ' · tuya' : '');
+    const sub = isl.port ? '⚓ Puerto · ' + Wd.zone(isl).n :'★'.repeat(isl.tier) + ' ' + D.TIERS[isl.tier].n + (isl.owned ? ' · tuya' : '');
     ctx.strokeText(sub, isl.x, y + 16);
     ctx.fillStyle = isl.port ? '#f4d03f' : D.TIERS[isl.tier].c; ctx.fillText(sub, isl.x, y + 16);
   }
@@ -695,9 +706,11 @@
     const S = PV.state, s = 170, m = 12, x0 = PV.W - s - m, y0 = m, k = s / Wd.SIZE;
     const c = Wd.FOG_CELL, n = Wd.FOG_N;
     ctx.fillStyle = 'rgba(6,18,28,0.88)'; ctx.fillRect(x0, y0, s, s);
-    ctx.fillStyle = '#1b5a85';
+    const zg = Wd.zoneGrid();
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-      if (S.fog[j * n + i]) ctx.fillRect(x0 + i * c * k, y0 + j * c * k, c * k + 0.6, c * k + 0.6);
+      if (!S.fog[j * n + i]) continue;
+      ctx.fillStyle = D.ZONES[zg[j * n + i]].mc;
+      ctx.fillRect(x0 + i * c * k, y0 + j * c * k, c * k + 0.6, c * k + 0.6);
     }
     for (const isl of S.islands) {
       if (!isl.explored) continue;
@@ -719,6 +732,23 @@
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -4); ctx.lineTo(-4, 4); ctx.fill();
     ctx.restore();
     ctx.strokeStyle = '#c9a45c'; ctx.lineWidth = 2; ctx.strokeRect(x0, y0, s, s);
+    // Nombre del mar donde estás, debajo del minimapa.
+    ctx.font = 'bold 13px Georgia'; ctx.textAlign = 'center';
+    const zn = D.ZONES[Wd.zoneAt(sh.x, sh.y)].n;
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.strokeText('🧭 ' + zn, x0 + s / 2, y0 + s + 17);
+    ctx.fillStyle = '#f3e2b8'; ctx.fillText('🧭 ' + zn, x0 + s / 2, y0 + s + 17);
+  }
+
+  // Cada mar tiene su color de agua, con una línea suave en el borde.
+  function drawZones(ctx) {
+    const sh = Wd.zoneShapes();
+    for (const o of sh.outer) { ctx.fillStyle = D.ZONES[o.k].c; ctx.fill(o.p); }
+    ctx.fillStyle = D.ZONES.mansas.c; ctx.fill(sh.inner);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 6; ctx.setLineDash([40, 30]);
+    ctx.stroke(sh.inner);
+    for (const l of sh.lines) ctx.stroke(l);
+    ctx.restore();
   }
 
   Sea.drawBackdrop = function (ctx) {
@@ -740,6 +770,7 @@
     ctx.translate(W / 2 + sx, H / 2 + sy); ctx.scale(z, z); ctx.translate(-camx, -camy);
     const x0 = camx - W / 2 / z - 60, x1 = camx + W / 2 / z + 60, y0 = camy - H / 2 / z - 60, y1 = camy + H / 2 / z + 60;
 
+    drawZones(ctx);
     drawWaves(ctx, x0, y0, x1, y1, t);
     const vis = S.islands.filter(i => i.x + i.R * 1.5 > x0 && i.x - i.R * 1.5 < x1 && i.y + i.R * 1.5 > y0 && i.y - i.R * 1.5 < y1);
     for (const isl of vis) drawIsland(ctx, isl, t);

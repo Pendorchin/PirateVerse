@@ -27,7 +27,7 @@
     const islands = PV.World.generate(seed);
     const home = islands[0];
     return {
-      v: 1, seed, diff: diff || 'normal', doblones: 400, nextId: 1, time: 0, islands,
+      v: 1, zonesV: 1, seed, diff: diff || 'normal', doblones: 400, nextId: 1, time: 0, islands,
       ship: { x: home.x + home.R + 140, y: home.y, a: 0, v: 0, hp: 100, up: { bodega: 0, casco: 0, canones: 0, velas: 0 }, cargo: {} },
       fog: new Array(PV.World.FOG_N * PV.World.FOG_N).fill(0),
       fleet: [],
@@ -56,9 +56,17 @@
     if (!s.diff) s.diff = 'normal';
     PV.Tech.reset();
     PV.Tech.migrate();
+    // Partidas viejas: se suman los puertos de las zonas nuevas y cada puerto toma los precios de su zona.
+    const r = PV.U.rng((s.seed ^ 0x5a17c0de) >>> 0);
+    if (!s.zonesV) {
+      const n = PV.World.addPorts(s.islands, r);
+      for (let i = s.fog.length; i < PV.World.FOG_N * PV.World.FOG_N; i++) s.fog.push(0);
+      s.zonesV = 1;
+      if (n) setTimeout(() => PV.UI.toast(`🧭 El mar ahora tiene zonas y se abrieron ${n} puertos nuevos. Cada zona vende lo suyo y paga bien lo que le falta.`, 'good'), 1500);
+    }
     for (const isl of s.islands) {
       if (isl.grid) { PV.Island.migrate(isl); PV.Island.rebuildOcc(isl); }
-      // Partidas viejas: precios para los recursos nuevos.
+      if (isl.port && !isl.zone) PV.World.setupMarket(isl, r);
       if (isl.port) for (const k in PV.D.RES) if (!isl.market[k]) isl.market[k] = { m: 1, f: 1 };
     }
     PV.Sea.init();
