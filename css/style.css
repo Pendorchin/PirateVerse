@@ -298,3 +298,16 @@ table.market small.muted { font-size: 11px; }
 #newsBox .muted { color: #c9b791; }
 #newsBox details.old { margin-top: 6px; color: #e6d6b3; }
 #newsBox details.old details { margin: 4px 0 0 12px; }
+
+/* Balandras en el panel del muelle */
+#chooser.wide { width: 380px; }
+.cb { border-bottom: 1px solid rgba(90,58,30,.25); padding-bottom: 8px; margin-bottom: 8px; }
+.cb-title { font-weight: bold; margin: 2px 0; }
+.cb-boat { background: rgba(255,255,255,.35); border: 1px solid rgba(90,58,30,.2); border-radius: 6px; padding: 6px; margin: 6px 0; }
+.cb-h { display: flex; justify-content: space-between; align-items: center; }
+.cb-st { font-size: 12px; opacity: .8; margin: 2px 0 4px; }
+.cb-stop { display: flex; flex-wrap: wrap; gap: 3px; margin: 3px 0; }
+.cb-stop button, .cb-sell, .cb-add { padding: 2px 7px; font-size: 12px; }
+.cb-stop button:nth-child(2) { flex: 1; text-align: left; }
+.cb-warn { width: 100%; font-size: 11px; color: var(--bad); }
+.cb-buy { width: 100%; margin-top: 4px; }

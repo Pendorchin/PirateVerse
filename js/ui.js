@@ -167,14 +167,50 @@
       html: recipeOpts(b.type, b) }),
     destileria: b => ({ title: `${D.BUILD[b.type].icon} ${D.BUILD[b.type].n}: receta`, sub: 'La caña fina crece en islas ★★ y ★★★.',
       html: recipeOpts(b.type, b) }),
-    muelle: b => ({ title: '⚓ Muelle: al llegar, bajar del barco…', sub: 'Lo que marques se baja solo al almacén una vez, cuando llegás a la isla o desembarcás. Lo que cargues a mano después no se toca. (Lo que traen los senderos al muelle se sube solo al barco.)',
+    muelle: b => ({ title: '⚓ Muelle', top: coastHtml(), sub: '<b>Al llegar con tu barco, bajar…</b><br>' + 'Lo que marques se baja solo al almacén una vez, cuando llegás a la isla o desembarcás. Lo que cargues a mano después no se toca. (Lo que traen los senderos al muelle se sube solo al barco.)',
       html: resOpts(k => b.unload.includes(k)), multi: true }),
   };
+
+  // Balandras de la isla: se compran y se arman sus rutas desde el muelle.
+  function coastHtml() {
+    const isl = PV.Island.cur, F = PV.Fleet, C = D.COASTER;
+    if (!isl) return '';
+    const name = id => PV.state.islands[id].name;
+    const list = F.coastOf(isl).map(c => {
+      const stops = c.stops.map((s, i) => {
+        const noDock = s.mode === 'traer' && !PV.Island.docks(PV.state.islands[s.isl]).length;
+        return `<div class="cb-stop">
+          <button data-v="cb:mode:${c.id}:${i}" title="Cambiar entre traer y llevar">${s.mode === 'traer' ? '⬅ Trae de' : '➡ Lleva a'}</button>
+          <button data-v="cb:isl:${c.id}:${i}" title="Cambiar de isla">${name(s.isl)} 🔄</button>
+          <button data-v="cb:del:${c.id}:${i}" title="Quitar parada">✕</button>
+          ${noDock ? '<div class="cb-warn">⚠ Esa isla no tiene muelle: no hay de dónde cargar.</div>' : ''}</div>`;
+      }).join('');
+      return `<div class="cb-boat"><div class="cb-h"><b>⛵ ${c.name}</b> <button data-v="cb:sell:${c.id}" class="cb-sell" title="Vender por la mitad">Vender</button></div>
+        <div class="cb-st">${F.coastStatus(c)}</div>${stops}
+        ${c.stops.length < C.stops ? `<button data-v="cb:add:${c.id}" class="cb-add">+ Agregar parada</button>` : ''}</div>`;
+    }).join('');
+    const n = F.coastOf(isl).length, max = F.coastMax(isl), can = n < max && PV.Inv.canPay(C.cost, isl);
+    return `<div class="cb"><div class="cb-title">⛵ Balandras de ${isl.name} (${n}/${max})</div>
+      <div class="sub">Mueven carga entre tus islas. <b>Trae de</b>: carga lo que hay en el muelle de esa isla y lo deja acá. <b>Lleva a</b>: carga lo que hay en este muelle y lo deja en el almacén de esa isla. Carga ${C.cap}, hasta ${C.stops} paradas.</div>
+      ${list}
+      <button data-v="cb:buy" class="primary cb-buy" ${can ? '' : 'disabled'}>Comprar balandra (${PV.Island.costTxt(C.cost)})</button></div>`;
+  }
+
+  function pickCoast(v) {
+    const isl = PV.Island.cur, [, what, id, s] = v.split(':');
+    if (what === 'buy') PV.Fleet.buyCoaster(isl);
+    else {
+      const c = PV.Fleet.coast().find(o => o.id === +id);
+      if (c) PV.Fleet.coastEdit(c, what, +s);
+    }
+    renderChooser();
+  }
 
   function pick(v) {
     const b = chooseB;
     if (!b) return;
     if (v === '__close') return UI.closeChooser();
+    if (v && v.startsWith('cb:')) return pickCoast(v);
     if (D.base(b.type) === 'muelle') {
       const i = b.unload.indexOf(v);
       if (i >= 0) b.unload.splice(i, 1); else b.unload.push(v);
@@ -194,7 +230,8 @@
 
   function renderChooser() {
     const c = UI.CHOOSE[D.base(chooseB.type)](chooseB);
-    $('chooser').innerHTML = `<h4>${c.title}</h4>${c.sub ? `<div class="sub">${c.sub}</div>` : ''}<div class="opts ${c.multi || chooseB.recipe === undefined ? 'grid' : ''}">${c.html}</div>
+    $('chooser').classList.toggle('wide', !!c.top);
+    $('chooser').innerHTML = `<h4>${c.title}</h4>${c.top || ''}${c.sub ? `<div class="sub">${c.sub}</div>` : ''}<div class="opts ${c.multi || chooseB.recipe === undefined ? 'grid' : ''}">${c.html}</div>
       <button data-v="__close" class="close">Listo</button>`;
   }
 

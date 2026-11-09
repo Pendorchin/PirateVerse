@@ -283,6 +283,9 @@
 
   // Barcos mercantes automáticos.
   D.MERCHANT = { cost: { doblones: 800, tablones: 40 }, cap: 60, speed: 120, max: 5 };
+  // Balandra de cabotaje: se compra en el muelle de una isla tuya y mueve carga entre tus islas.
+  // Hasta 2 paradas; en cada una trae carga a su isla o lleva carga desde su isla.
+  D.COASTER = { cost: { doblones: 400, tablones: 30 }, cap: 40, speed: 144, perDock: 2, stops: 2, wait: 4 };
 
   // Mejoras del barco. lv[0] es el barco inicial.
   D.UP = {

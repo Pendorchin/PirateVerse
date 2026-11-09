@@ -727,6 +727,8 @@
     }
     ctx.fillStyle = '#85c1e9';
     for (const m of PV.Fleet.list()) ctx.fillRect(x0 + m.x * k - 1.5, y0 + m.y * k - 1.5, 3, 3);
+    ctx.fillStyle = '#82e0aa';
+    for (const c of PV.Fleet.coast()) ctx.fillRect(x0 + c.x * k - 1.5, y0 + c.y * k - 1.5, 3, 3);
     const sh = S.ship;
     ctx.save(); ctx.translate(x0 + sh.x * k, y0 + sh.y * k); ctx.rotate(sh.a);
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -4); ctx.lineTo(-4, 4); ctx.fill();
@@ -797,6 +799,15 @@
       ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.strokeText(m.name, m.x, m.y - 30);
       ctx.fillStyle = '#d6eaf8'; ctx.fillText(m.name, m.x, m.y - 30);
     }
+    // Balandras de cabotaje: más chicas, vela verde clara.
+    for (const c of PV.Fleet.coast()) {
+      if (c.x < x0 || c.x > x1 || c.y < y0 || c.y > y1) continue;
+      ctx.save(); ctx.translate(c.x, c.y); ctx.scale(0.8, 0.8); ctx.translate(-c.x, -c.y);
+      drawShip(ctx, c, '#d5f5e3', '#7a5a34', 0, '#1e8449');
+      ctx.restore();
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.strokeText(c.name, c.x, c.y - 26);
+      ctx.fillStyle = '#d5f5e3'; ctx.fillText(c.name, c.x, c.y - 26);
+    }
     if (!(sh.sunk > 0)) drawShip(ctx, sh, '#fbf6e9', '#8a5a2b', Sea.stats().guns, '#c0392b');
 
     ctx.fillStyle = '#111';
@@ -819,7 +830,7 @@
     const lights = [];
     for (const isl of vis) if (isl.owned || isl.port) lights.push(toScr(isl.x, isl.y, isl.R * (isl.port ? 1.6 : 1.3)));
     if (!(sh.sunk > 0)) lights.push(toScr(sh.x, sh.y, 110));
-    for (const m of PV.Fleet.list()) lights.push(toScr(m.x, m.y, 60));
+    for (const m of PV.Fleet.list().concat(PV.Fleet.coast())) lights.push(toScr(m.x, m.y, 60));
     PV.Colony.drawNight(ctx, lights);
 
     drawMinimap(ctx);

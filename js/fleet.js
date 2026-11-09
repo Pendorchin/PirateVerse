@@ -55,7 +55,7 @@
     }
   }
 
-  function sail(m, target, dt) {
+  function sail(m, target, dt, speed) {
     let want = Math.atan2(target.y - m.y, target.x - m.x);
     // Esquiva las islas que tiene adelante.
     for (const I of PV.state.islands) {
@@ -66,7 +66,7 @@
       if (Math.abs(diff) < 1.3) want += Math.sign(diff || 1) * (1.3 - Math.abs(diff)) * 1.3;
     }
     m.a += U.clamp(U.angDiff(want, m.a), -1.6 * dt, 1.6 * dt);
-    m.v = U.lerp(m.v, D.MERCHANT.speed * PV.Tech.fx('mSpeed'), Math.min(1, dt));
+    m.v = U.lerp(m.v, (speed || D.MERCHANT.speed) * PV.Tech.fx('mSpeed'), Math.min(1, dt));
     m.x += Math.cos(m.a) * m.v * dt;
     m.y += Math.sin(m.a) * m.v * dt;
     PV.Sea.collide(m, 20);
@@ -103,6 +103,117 @@
           if (got) PV.UI.toast(`⛵ ${m.name} vendió su carga en ${P.name} por ${got} doblones.`, 'good');
           m.st = 'toHome';
         }
+      }
+    }
+  };
+
+  // ---------- Balandras de cabotaje (entre tus islas) ----------
+  const CB = D.COASTER;
+  const CB_NAMES = ['La Sardina', 'El Delfín', 'La Garza', 'El Pejerrey', 'La Mojarra', 'El Bagre', 'La Corvina', 'El Lenguado'];
+  Fleet.coast = () => PV.state.coast || (PV.state.coast = []);
+  Fleet.coastOf = isl => Fleet.coast().filter(c => c.home === isl.id);
+  Fleet.coastMax = isl => PV.Island.docks(isl).length * CB.perDock;
+  const load = c => PV.Inv.sum(c.in) + PV.Inv.sum(c.out);
+  // Ruta: su isla y después las paradas que siguen siendo tuyas.
+  const route = c => [c.home].concat(c.stops.filter(s => islandOf(s.isl).owned).map(s => s.isl));
+  const stopOf = (c, id) => c.stops.find(s => s.isl === id);
+
+  Fleet.buyCoaster = function (isl) {
+    const S = PV.state, mine = Fleet.coastOf(isl);
+    if (!PV.Island.docks(isl).length) return PV.UI.toast('Primero construí un muelle en esta isla.', 'bad');
+    if (mine.length >= Fleet.coastMax(isl)) return PV.UI.toast(`Cada muelle tiene lugar para ${CB.perDock} balandras. Construí otro muelle para tener más.`, 'bad');
+    if (!PV.Inv.canPay(CB.cost, isl)) return PV.UI.toast('Te falta: ' + PV.Island.costTxt(CB.cost), 'bad');
+    PV.Inv.pay(CB.cost, isl);
+    const others = owned().filter(o => o.id !== isl.id);
+    const c = {
+      id: S.nextId++, name: CB_NAMES[Fleet.coast().length % CB_NAMES.length], home: isl.id,
+      stops: others.length ? [{ isl: others[0].id, mode: 'traer' }] : [],
+      x: isl.x + isl.R + 100, y: isl.y + 40, a: 0, v: 0, leg: 0, st: 'sail', wait: 0, in: {}, out: {},
+    };
+    Fleet.coast().push(c);
+    PV.UI.toast(`⛵ ¡Compraste la balandra ${c.name}! Elegí sus paradas en el muelle.`, 'good');
+    return c;
+  };
+
+  // Cambios de ruta desde el panel del muelle.
+  Fleet.coastEdit = function (c, what, s) {
+    const others = owned().filter(o => o.id !== c.home);
+    if (what === 'add') {
+      if (c.stops.length >= CB.stops) return;
+      const free = others.find(o => !stopOf(c, o.id));
+      if (!free) return PV.UI.toast(others.length ? 'Ya pasa por todas tus otras islas: conquistá otra para sumar una parada.' : 'Necesitás otra isla tuya para armar una ruta.', 'bad');
+      c.stops.push({ isl: free.id, mode: 'traer' });
+    } else if (what === 'isl') {
+      const st = c.stops[s];
+      if (!st || !others.length) return;
+      // La siguiente isla que no esté ya en la otra parada.
+      const i = others.findIndex(o => o.id === st.isl);
+      for (let k = 1; k <= others.length; k++) {
+        const o = others[(i + k) % others.length];
+        if (o.id === st.isl || !c.stops.some(x => x !== st && x.isl === o.id)) { st.isl = o.id; break; }
+      }
+    } else if (what === 'mode') {
+      const st = c.stops[s];
+      if (st) st.mode = st.mode === 'traer' ? 'llevar' : 'traer';
+    } else if (what === 'del') {
+      c.stops.splice(s, 1);
+    } else if (what === 'sell') {
+      // Se vende por la mitad; lo que lleva a bordo vuelve al almacén de su isla.
+      const H = islandOf(c.home);
+      for (const bag of [c.in, c.out]) for (const k in bag) PV.Inv.add(H.storage, k, bag[k]);
+      PV.state.doblones += Math.round(CB.cost.doblones / 2);
+      PV.state.coast = Fleet.coast().filter(o => o !== c);
+      PV.UI.toast(`Vendiste la balandra ${c.name} por ${Math.round(CB.cost.doblones / 2)} doblones.`);
+    }
+    c.leg = 0; c.st = 'sail'; // vuelve a empezar la vuelta desde su isla
+  };
+
+  Fleet.coastStatus = function (c) {
+    const r = route(c);
+    if (r.length < 2) return 'Sin paradas: agregale una isla.';
+    const at = islandOf(r[c.leg % r.length]), n = load(c);
+    if (c.st === 'stop') return `En ${at.name} (${n}/${CB.cap})`;
+    return `Rumbo a ${at.name} con ${n}/${CB.cap}${c.hungry ? ' · sin provisiones, va lento' : ''}`;
+  };
+
+  // Lo que hace al llegar a cada isla.
+  function coastArrive(c, I) {
+    const room = () => CB.cap - load(c);
+    if (I.id === c.home) {
+      for (const k of Object.keys(c.in)) { PV.Inv.add(I.storage, k, c.in[k]); delete c.in[k]; }
+      if (c.stops.some(s => s.mode === 'llevar' && islandOf(s.isl).owned)) PV.Island.takeFromDocks(I, c.out, room());
+      // Provisiones de la tripulación, del almacén de su isla.
+      const need = D.COLONY.merchant;
+      c.hungry = false;
+      for (const k in need) {
+        const got = Math.min(need[k], I.storage[k] || 0);
+        PV.Inv.add(I.storage, k, -got);
+        if (got < need[k]) c.hungry = true;
+      }
+      return;
+    }
+    const st = stopOf(c, I.id);
+    if (!st) return;
+    if (st.mode === 'traer') { PV.Island.takeFromDocks(I, c.in, room()); return; }
+    // Llevar: reparte lo que lleva entre las paradas de "llevar" que quedan en esta vuelta.
+    const r = route(c), left = r.slice(c.leg % r.length).filter(id => { const s = stopOf(c, id); return s && s.mode === 'llevar'; }).length || 1;
+    for (const k of Object.keys(c.out)) {
+      const n = Math.ceil(c.out[k] / left);
+      PV.Inv.add(I.storage, k, n); PV.Inv.add(c.out, k, -n);
+    }
+  }
+
+  Fleet.updateCoast = function (dt) {
+    for (const c of Fleet.coast()) {
+      const r = route(c);
+      if (r.length < 2) { c.leg = 0; c.st = 'stop'; c.v = U.lerp(c.v, 0, Math.min(1, dt * 2)); continue; }
+      const I = islandOf(r[c.leg % r.length]);
+      if (c.st === 'sail') {
+        if (sail(c, I, dt, CB.speed * (c.hungry ? 0.7 : 1))) { c.st = 'stop'; c.wait = 0; coastArrive(c, I); }
+      } else {
+        c.v = U.lerp(c.v, 0, Math.min(1, dt * 2));
+        c.wait += dt;
+        if (c.wait >= CB.wait) { c.leg = (c.leg + 1) % r.length; c.st = 'sail'; }
       }
     }
   };

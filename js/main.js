@@ -106,6 +106,7 @@
       PV.Island.updateAll(dt);
       PV.Port.update(dt);
       PV.Fleet.update(dt);
+      PV.Fleet.updateCoast(dt);
       PV.Bank.update(dt);
       PV.Colony.update(dt);
       PV.Raid.update(dt);
