@@ -7,6 +7,7 @@
       '🧭 El mar ahora tiene <b>5 zonas</b>, cada una con su color: Aguas Mansas, Mar de las Brumas, Costa de las Especias, Arrecifes de Coral y Mar de Ceniza.',
       '⚓ Hay <b>8 puertos</b> (antes 3). Cada zona vende lo suyo barato, paga bien lo que le falta y no compra algunas cosas: llevá mercancía de un mar a otro para ganar más.',
       '📦 Lo que vende un puerto se acaba y se repone de a poco. Raciones, ron y balas se consiguen en todos.',
+      '💰 Cada <b>mercante</b> nuevo cuesta más, pero carga más (+10 por cada uno) y navega más rápido (+6%). Los que ya tenías quedan como el primero.',
       '⛵ <b>Balandras</b> entre tus islas: hacé clic en el muelle de una isla y comprá una (400 doblones y 30 tablones, 2 por muelle). Tiene hasta 2 paradas y en cada una elegís si <b>trae</b> a esta isla lo que hay en el muelle de la otra, o <b>lleva</b> lo de este muelle al almacén de la otra.',
       '🔀 Nuevo <b>Repartidor</b> (tecla <kbd>N</kbd>, pestaña Logística): divide la carga de un sendero en 2 caminos, una a la izquierda y otra a la derecha. Si un lado se llena, manda todo al otro.',
       '💪 Estibador: nueva opción <b>⛔ Nada</b> para dejarlo parado. Y con la investigación <b>Estibadores con lista</b>, la opción <b>🔬 Lo que pide la investigación</b>: saca del almacén solo lo que le falta a la investigación de ahora.',

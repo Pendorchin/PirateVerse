@@ -244,16 +244,18 @@
   function fleetHtml() {
     const L = PV.Fleet.list(), M = D.MERCHANT, isl = id => PV.state.islands[id];
     const rows = L.map((m, i) => `<div class="fleet"><img src="${PV.Spr.src('barco_mercante')}" alt="">
-      <div><h4 style="margin:0">${m.name}</h4><div class="sub">${isl(m.home).name} → ${isl(m.port).name} <span class="muted">(${Wd.zone(isl(m.port)).n})</span></div>
+      <div><h4 style="margin:0">${m.name} <small class="muted">· carga ${PV.Fleet.cap(m)} · velocidad ${Math.round(PV.Fleet.speedOf(m) / M.speed * 100)}%</small></h4><div class="sub">${isl(m.home).name} → ${isl(m.port).name} <span class="muted">(${Wd.zone(isl(m.port)).n})</span></div>
         <div class="sub muted">Paga bien ${names(Wd.zone(isl(m.port)).wants)}${Wd.zone(isl(m.port)).refuses.length ? ' · no compra ' + names(Wd.zone(isl(m.port)).refuses) : ''}</div>
         <div class="sub">${PV.Fleet.status(m)} · ganó ${U.fmt(m.earned)} <i class="coin"></i></div></div>
       <div style="display:flex;flex-direction:column;gap:4px">
         <button data-act="fhome" data-i="${i}">Cambiar isla</button><button data-act="fport" data-i="${i}">Cambiar puerto</button></div></div>`).join('');
-    const can = L.length < M.max && PV.Inv.canPay(M.cost, null);
-    return `<p class="muted">Los mercantes cargan solos en el <b>muelle</b> de tu isla, navegan al puerto, venden todo y vuelven. Llevan ${PV.Fleet.cap()} de carga.</p>
+    const full = L.length >= M.max, cost = PV.Fleet.nextCost(), nxt = { lvl: L.length };
+    const can = !full && PV.Inv.canPay(cost, null);
+    return `<p class="muted">Los mercantes cargan solos en el <b>muelle</b> de tu isla, navegan al puerto, venden todo y vuelven. Cada mercante nuevo cuesta más, pero carga más y navega más rápido.</p>
       ${rows || '<p class="muted">Todavía no tenés mercantes.</p>'}
       <div class="fleet"><img src="${PV.Spr.src('barco_mercante')}" alt="" style="filter:grayscale(.6)">
-        <div><h4 style="margin:0">Comprar mercante</h4><div class="sub">${PV.Inv.costHtml(M.cost, null)} · ${L.length}/${M.max}</div></div>
+        <div><h4 style="margin:0">Comprar mercante</h4>
+          <div class="sub">${full ? 'Ya tenés el máximo.' : `${PV.Inv.costHtml(cost, null)} · carga ${PV.Fleet.cap(nxt)} · velocidad ${Math.round(PV.Fleet.speedOf(nxt) / M.speed * 100)}%`} · ${L.length}/${M.max}</div></div>
         <button class="primary" data-act="buyship" ${can ? '' : 'disabled'}>Comprar</button></div>`;
   }
 
