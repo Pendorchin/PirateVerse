@@ -252,3 +252,9 @@ body:has(#islandPanel:not(.hidden)) #tutBtn { top: 12px; }
 body:has(#raidBanner:not(.hidden)) #toasts { top: 88px !important; }
 .lbl.colony { font-size: 12px; line-height: 1.45; }
 .lbl.warn { color: #c0392b; }
+
+/* Nube en el menú */
+#cloudBox { margin: 14px auto 0; width: 320px; }
+#cloudBox button { display: block; margin: 0 auto 6px; width: 260px; font-size: 16px; padding: 8px; }
+#cloudBox .cloud-st { font-size: 13px; color: #f8e9c6; opacity: .85; margin-top: 4px; }
+#cloudBox a { color: var(--gold); }

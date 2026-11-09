@@ -16,6 +16,18 @@
   const resName = k => D.RES[k].n;
   const helpHtml = list => list.map(([keys, label]) => `<span>${keys.map(k => `<kbd>${k}</kbd>`).join(keys.length === 2 && ['1', 'G'].includes(keys[0]) ? '–' : '')} ${label}</span>`).join('');
 
+  // Caja de la nube en el menú: iniciar o cerrar sesión, y cómo está la sincronización.
+  UI.cloudChanged = function () {
+    const C = PV.Cloud, box = $('cloudBox');
+    if (!box) return;
+    const st = C.status ? `<div class="cloud-st">${C.status}</div>` : '';
+    if (!C.ready) box.innerHTML = st || '<div class="cloud-st">Conectando con la nube…</div>';
+    else if (!C.user) box.innerHTML = `<button data-cloud="in">☁️ Iniciar sesión con Google</button><div class="cloud-st">Para tener la misma partida en cualquier compu.</div>${st}`;
+    else box.innerHTML = `<div class="cloud-st">☁️ Conectado como <b>${String(C.user.name).replace(/[<>&"]/g, c => '&#' + c.charCodeAt(0) + ';')}</b> · <a href="#" data-cloud="out" role="button">cerrar sesión</a></div>${st}`;
+    box.querySelectorAll('a[data-cloud]').forEach(a => a.onclick = e => { e.preventDefault(); PV.Cloud.signOut(); });
+    $('btnContinue').disabled = !PV.Save.has();
+  };
+
   UI.init = function () {
     $('btnNew').onclick = () => {
       if (PV.Save.has() && !confirm('¿Empezar una partida nueva? Se pierde la guardada.')) return;
@@ -31,6 +43,12 @@
       PV.newGame($('tutAsk').dataset.diff, b.dataset.tut === '1');
     });
     $('btnContinue').onclick = () => PV.continueGame();
+    $('cloudBox').addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (b && b.dataset.cloud === 'in') PV.Cloud.signIn();
+      if (b && b.dataset.cloud === 'out') PV.Cloud.signOut();
+    });
+    UI.cloudChanged();
     $('btnContinue').disabled = !PV.Save.has();
 
     $('islandPanel').addEventListener('click', e => {

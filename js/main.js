@@ -81,7 +81,7 @@
     else if (PV.scene === 'sea' && type === 'wheel') PV.Sea.zoomBy(e.deltaY);
   };
 
-  window.addEventListener('beforeunload', () => PV.Save.save());
+  window.addEventListener('beforeunload', () => { PV.Save.save(); PV.Cloud.flush(); });
 
   let last = performance.now(), saveT = 0;
   function frame(now) {
@@ -112,6 +112,7 @@
   }
 
   PV.UI.init();
+  PV.Cloud.init();
   PV.UI.onScene('menu');
   requestAnimationFrame(frame);
 })(window.PV);
