@@ -69,6 +69,8 @@
                    desc: '2 mineral + combustible (madera o carbón) → 1 lingote.' },
     clasificador:{ n: 'Capataz',    key: 'Digit7', k: '7', icon: '🧭', w: 1, h: 1, cost: { doblones: 30, tablones: 2 },
                    desc: 'Reparte la carga: lo elegido sigue derecho y el resto sale por los costados. Clic para elegir.' },
+    repartidor:  { n: 'Repartidor', key: 'KeyN', k: 'N', icon: '🔀', w: 1, h: 1, cost: { doblones: 30, tablones: 2 },
+                   desc: 'Divide la carga en 2 caminos: una a la izquierda y otra a la derecha, turnándose. Si un lado está lleno, manda todo al otro.' },
     insertador:  { n: 'Estibador',  key: 'Digit8', k: '8', icon: '💪', w: 1, h: 1, cost: { doblones: 25 },
                    desc: 'Agarra de atrás (almacén, sendero o taller) y lo deja adelante. Clic para filtrar.' },
     herreria:    { n: 'Herrería',   key: 'Digit9', k: '9', icon: '⚒️', w: 3, h: 3, cost: { doblones: 200, piedra: 20, lingote_hierro: 5 },
@@ -136,7 +138,7 @@
     { k: 'rec', n: 'Recursos', icon: '⛏️', list: ['lenadores', 'extractor', 'cinta', 'almacen'] },
     { k: 'food', n: 'Comida y ron', icon: '🍺', list: ['pesqueria', 'canaveral', 'cocina', 'destileria', 'taberna'] },
     { k: 'fab', n: 'Fábricas', icon: '🔥', list: ['aserradero', 'fundicion', 'herreria', 'taller'] },
-    { k: 'log', n: 'Logística', icon: '💪', list: ['clasificador', 'insertador', 'muelle'] },
+    { k: 'log', n: 'Logística', icon: '💪', list: ['clasificador', 'repartidor', 'insertador', 'muelle'] },
     { k: 'eco', n: 'Investigación y banca', icon: '🗺️', list: ['cartografo', 'banco'] },
     { k: 'def', n: 'Defensa', icon: '🛡️', list: ['bateria', 'empalizada', 'cuartel', 'torre_vigia'] },
   ];

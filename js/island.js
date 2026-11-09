@@ -163,7 +163,7 @@
       case 'aserradero':
         if (item === 'madera' && b.n < 10) { if (!dry) b.n++; return true; }
         return false;
-      case 'clasificador':
+      case 'clasificador': case 'repartidor':
         if (b.hold) return false;
         if (!dry) b.hold = item;
         return true;
@@ -323,6 +323,17 @@
         }
         break;
       }
+      case 'repartidor': {
+        // Se turna: una carga a la izquierda, la siguiente a la derecha. Si un lado no recibe, va al otro.
+        if (!b.hold) break;
+        const sides = [(b.dir + 3) % 4, (b.dir + 1) % 4];
+        const first = b.side || 0;
+        for (const s of [first, 1 - first]) {
+          const [dx, dy] = DIRS[sides[s]];
+          if (give(isl, b, b.x + dx, b.y + dy, b.hold)) { b.hold = null; b.side = 1 - s; break; }
+        }
+        break;
+      }
       case 'insertador': {
         // Tarda INS_T segundos por viaje; con investigación camina más rápido y lleva varias cosas iguales.
         const [dx, dy] = DIRS[b.dir], fx = b.x + dx, fy = b.y + dy;
@@ -442,6 +453,8 @@
         return PV.Inv.sum(b.store) >= Isl.dockCap(b) ? { ic: '⛔', lvl: 'dead', msg: 'Muelle lleno: pasá con el barco o con un mercante.' } : null;
       case 'clasificador':
         return b.hold ? { ic: '🚧', lvl: 'stuck', msg: `No tiene por dónde mandar ${D.RES[b.hold].n}.` } : null;
+      case 'repartidor':
+        return b.hold ? { ic: '🚧', lvl: 'stuck', msg: `No puede mandar ${D.RES[b.hold].n}: poné un sendero a la izquierda o a la derecha (o están llenos).` } : null;
       case 'cartografo': {
         const cur = PV.Tech.st().cur;
         if (!cur) return { ic: '📜', lvl: 'wait', msg: 'No hay nada para investigar: hacé clic y elegí una investigación.' };
@@ -772,6 +785,8 @@
         s += `Porteadores con carga: ${b.items.length}`;
       } else if (kb === 'clasificador') {
         s += `Sigue derecho: <b>${b.filter ? D.RES[b.filter].n : 'todo'}</b><br>El resto sale por los costados.<br><i>Clic para elegir.</i>`;
+      } else if (kb === 'repartidor') {
+        s += `Recibe por atrás y reparte en 2 caminos: izquierda y derecha, una y una.<br>Si un lado está lleno, manda todo al otro.<br><i>Tecla R para girarlo antes de ponerlo.</i>`;
       } else if (kb === 'insertador') {
         const what = b.filter === Isl.INS_NONE ? 'nada (está parado)' : b.filter === Isl.INS_TECH ? 'lo que pide la investigación' : b.filter ? D.RES[b.filter].n : 'cualquier cosa';
         s += `Agarra: <b>${what}</b>` + (b.hand ? `<br>Lleva: ${D.RES[b.hand].n} ×${b.handN || 1}` : '') +
@@ -916,7 +931,7 @@
     ctx.strokeStyle = line; ctx.lineWidth = 2; ctx.stroke();
   }
 
-  const NO_ARROW = ['taberna', 'almacen', 'muelle', 'cartografo', 'banco', 'bateria', 'empalizada', 'cuartel', 'torre_vigia'];
+  const NO_ARROW = ['repartidor', 'taberna', 'almacen', 'muelle', 'cartografo', 'banco', 'bateria', 'empalizada', 'cuartel', 'torre_vigia'];
   function drawMachine(ctx, b, isl, t) {
     const def = D.BUILD[b.type], px = b.x * T, py = b.y * T, w = def.w * T, h = def.h * T;
     if (def.of) return drawEvolved(ctx, b, isl, t, def);
@@ -1231,6 +1246,21 @@
       ctx.fillStyle = '#6d4c2a'; ctx.fillRect(px + T - 9, py + 3, 2, 10);
       ctx.fillStyle = b.filter ? D.RES[b.filter].c : '#f4ecd8'; ctx.strokeStyle = '#3b2410'; ctx.lineWidth = 1;
       ctx.fillRect(px + T - 13, py + 2, 10, 7); ctx.strokeRect(px + T - 13, py + 2, 10, 7);
+      if (b.hold) drawBundle(ctx, cx + 6, cy + 6, b.hold, 3.5);
+    } else if (b.type === 'repartidor') {
+      // Repartidor: un hombre en el cruce que señala a un lado y al otro, con flechas amarillas a los costados.
+      drawBelt(ctx, b);
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(b.dir * Math.PI / 2);
+      ctx.fillStyle = '#f1c40f'; ctx.strokeStyle = '#3b2410'; ctx.lineWidth = 1.2;
+      for (const sy of [-1, 1]) {
+        const on = (b.side || 0) === (sy < 0 ? 0 : 1); // el lado que le toca ahora, más marcado
+        ctx.globalAlpha = on ? 1 : 0.55;
+        ctx.beginPath(); ctx.moveTo(0, sy * 17); ctx.lineTo(-6, sy * 10); ctx.lineTo(6, sy * 10); ctx.closePath(); ctx.fill(); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      const look = b.dir * Math.PI / 2 + ((b.side || 0) ? Math.PI / 2 : -Math.PI / 2);
+      drawPerson(ctx, cx - 2, cy, look, '#6c3483', b.hold ? t * 8 : 0, '#1a1a1a');
       if (b.hold) drawBundle(ctx, cx + 6, cy + 6, b.hold, 3.5);
     } else if (b.type === 'insertador') {
       // Estibador: camina de atrás hacia adelante llevando una cosa por vez.
