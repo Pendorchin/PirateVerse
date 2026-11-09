@@ -52,7 +52,7 @@
 
   // Barco de un asalto pirata: navega hacia la isla atacada (home) y la rodea.
   Sea.spawnRaider = function (isl, x, y, t, a) {
-    const hp = 40 + t * 35;
+    const hp = Math.round((40 + t * 35) * D.RAID.raidHp);
     Sea.enemies.push({
       x, y, a, v: 60, home: isl.id, pa: Math.atan2(y - isl.y, x - isl.x), tier: t, hp, max: hp, guns: Math.min(t + 1, 5), dmg: 4 + t * 2,
       speed: 85 + t * 12, rl: 1 + Math.random() * 2, rr: 1 + Math.random() * 2, aggro: false, raid: true,
@@ -312,6 +312,19 @@
     updateFx(dt);
   };
 
+  // Si hay una costa justo adelante, gira para rodearla en vez de chocarla.
+  function steerAround(o, want) {
+    for (const I of PV.state.islands) {
+      const d = U.dist(o.x, o.y, I.x, I.y);
+      if (d > I.R * 1.6 + 200) continue;
+      const toI = Math.atan2(I.y - o.y, I.x - o.x), coast = d - Wd.radius(I, Math.atan2(o.y - I.y, o.x - I.x));
+      if (coast > 120) continue;
+      const diff = U.angDiff(want, toI);
+      if (Math.abs(diff) < 1.3) want += Math.sign(diff || 1) * (1.3 - Math.abs(diff)) * 1.4;
+    }
+    return want;
+  }
+
   function updateEnemy(e, dt, sh) {
     const home = PV.state.islands[e.home];
     const alive = !(sh.sunk > 0);
@@ -319,11 +332,30 @@
     if (alive && d < 520) e.aggro = true;
     if (!alive || d > 1100 || U.dist(e.x, e.y, home.x, home.y) > home.R + 1300) e.aggro = false;
 
+    // Cada barco elige un costado para rodearte, así varios juntos te encierran.
+    if (!e.flank) e.flank = Math.random() < 0.5 ? -1 : 1;
+    // Los guardianes muy golpeados huyen y se arreglan lejos; vuelven cuando están mejor.
+    if (!e.raid && e.hp < e.max * 0.3) e.flee = true;
+    if (e.flee && e.hp >= e.max * 0.7) e.flee = false;
+    if (e.flee && d > 600) e.hp = Math.min(e.max, e.hp + e.max * 0.01 * dt); // ~1% por segundo
+
+    // Apuntan adonde vas a estar, no adonde estás (las balas tardan en llegar).
+    const lead = Math.min(1.2, d / 420), svx = Math.cos(sh.a) * sh.v, svy = Math.sin(sh.a) * sh.v;
+    const px = sh.x + svx * lead, py = sh.y + svy * lead;
+
     let want;
-    if (e.aggro) {
-      const to = Math.atan2(sh.y - e.y, sh.x - e.x);
-      if (d > 300) want = to;
-      else want = to + (U.angDiff(e.a, to) > 0 ? 1 : -1) * Math.PI / 2; // ponerse de costado para disparar
+    if (e.aggro && e.flee) {
+      want = Math.atan2(e.y - sh.y, e.x - sh.x); // escapar
+      e.v = U.lerp(e.v, e.speed, dt);
+    } else if (e.aggro) {
+      const to = Math.atan2(py - e.y, px - e.x);
+      if (d > 340) want = to;
+      else {
+        // Dar vueltas a unos 220 de distancia (al alcance de los cañones), de costado:
+        // más adentro si está lejos, más afuera si está cerca.
+        const k = U.clamp((d - 220) / 160, -0.6, 0.9);
+        want = to + e.flank * (Math.PI / 2 - k);
+      }
       e.v = U.lerp(e.v, e.speed, dt);
     } else {
       e.pa += dt * 0.12;
@@ -331,14 +363,16 @@
       want = Math.atan2(home.y + Math.sin(e.pa) * pr - e.y, home.x + Math.cos(e.pa) * pr - e.x);
       e.v = U.lerp(e.v, e.speed * 0.5, dt);
     }
-    e.a += U.clamp(U.angDiff(want, e.a), -1.2 * dt, 1.2 * dt);
+    want = steerAround(e, want);
+    const turn = 1.2 + 0.08 * e.tier;
+    e.a += U.clamp(U.angDiff(want, e.a), -turn * dt, turn * dt);
     e.x += Math.cos(e.a) * e.v * dt;
     e.y += Math.sin(e.a) * e.v * dt;
     collide(e, 20);
 
     e.rl -= dt; e.rr -= dt;
-    if (e.aggro && alive && d < 400) {
-      const rel = U.angDiff(Math.atan2(sh.y - e.y, sh.x - e.x), e.a);
+    if (e.aggro && !e.flee && alive && d < 400) {
+      const rel = U.angDiff(Math.atan2(py - e.y, px - e.x), e.a);
       if (Math.abs(Math.abs(rel) - Math.PI / 2) < 0.4) {
         const side = rel > 0 ? 1 : -1, k = side > 0 ? 'rr' : 'rl';
         if (e[k] <= 0) { fire(e, side, e.guns, e.dmg, 'e'); e[k] = 3.2 - e.tier * 0.2; }

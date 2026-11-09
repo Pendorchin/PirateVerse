@@ -123,8 +123,9 @@
   // ---------- Textos para la interfaz ----------
   const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   Col.clock = function () {
-    return Col.isNight() ? `🌙 Noche del día ${Col.dayN()} · amanece en ${mmss(Col.toDay())}`
-      : `☀️ Día ${Col.dayN()} · anochece en ${mmss(Col.toNight())}`;
+    return (Col.isNight() ? `🌙 Noche del día ${Col.dayN()} · amanece en ${mmss(Col.toDay())}`
+      : `☀️ Día ${Col.dayN()} · anochece en ${mmss(Col.toNight())}`)
+      + (PV.Raid && !PV.Raid.st().cur ? ` · 🏴‍☠️ piratas el día ${PV.Raid.nextDay()}` : '');
   };
 
   Col.islandLine = function (isl) {

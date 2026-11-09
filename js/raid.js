@@ -7,9 +7,16 @@
   const TAU = Math.PI * 2;
   const Raid = {};
 
+  // Los asaltos llegan una vez por semana, al amanecer (días 8, 15, 22…).
+  const WEEK = () => R.week * D.COLONY.day;
+  Raid.toNext = () => WEEK() - ((PV.state.time || 0) % WEEK());
+  Raid.nextDay = () => Math.floor(((PV.state.time || 0) + Raid.toNext()) / D.COLONY.day) + 1;
+
   Raid.st = function () {
     const S = PV.state;
-    if (!S.raid) S.raid = { next: R.first, cur: null };
+    if (!S.raid) S.raid = { next: Raid.toNext(), cur: null, weekly: 1 };
+    // Partidas de antes: pasan al calendario semanal.
+    if (!S.raid.weekly) { S.raid.weekly = 1; if (!S.raid.cur) S.raid.next = Raid.toNext(); }
     return S.raid;
   };
 
@@ -26,9 +33,9 @@
     return 1 - (1 - walls) * (1 - bar);
   };
 
+  // Tiempo hasta el próximo asalto: el amanecer de la semana que viene.
   function interval() {
-    const o = owned().length;
-    return U.clamp(R.every - 50 * (o - 1) - Raid.wealth() / 400, R.minEvery, R.every);
+    return Raid.toNext() < 30 ? Raid.toNext() + WEEK() : Raid.toNext();
   }
 
   // Elige la isla: las más ricas y pobladas atraen más piratas.
@@ -45,7 +52,7 @@
     const st = Raid.st(), o = owned().length, wealth = Raid.wealth();
     isl = isl || pickTarget();
     if (!isl) return false;
-    const ships = U.clamp(1 + Math.floor((o - 1) / 2) + (wealth > 4000) + (wealth > 15000) + (isl.tier >= 3), 1, 6);
+    const ships = U.clamp(2 + Math.floor((o - 1) / 2) + (wealth > 4000) + (wealth > 15000) + (isl.tier >= 3), 1, 7);
     const tier = U.clamp(1 + Math.floor((o - 1) / 2) + (isl.tier >= 3 ? 1 : 0), 1, 5);
     const warn = R.warn + (Raid.watched(isl) ? R.watch : 0);
     st.cur = { isl: isl.id, phase: 'warn', t: warn, siege: R.siege, ships, tier };
@@ -81,7 +88,8 @@
     const st = Raid.st(), cur = st.cur;
     if (!cur) {
       st.next -= dt;
-      if (st.next <= 0) st.next = Raid.start() ? interval() : 60;
+      // Si todavía no hay ninguna isla que valga la pena, esa semana no vienen.
+      if (st.next <= 0) { Raid.start(); st.next = interval(); }
       return;
     }
     const isl = S.islands[cur.isl];

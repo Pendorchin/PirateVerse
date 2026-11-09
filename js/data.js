@@ -150,8 +150,9 @@
   //   warn: aviso previo (la Torre vigía suma watch). siege: segundos de asedio hasta saquear.
   //   loot: parte del almacén y del banco que se llevan; wall/barracks: cuánto reduce cada empalizada / cuartel.
   D.RAID = {
-    first: 600, every: 540, minEvery: 180, warn: 60, watch: 60, siege: 75,
-    loot: 0.3, wall: 0.02, wallMax: 0.5, barracks: 0.3, barracksMax: 0.6,
+    // week: cada cuántos días llega un asalto (al amanecer). raidHp: vida extra de los barcos del asalto.
+    week: 7, raidHp: 1.3, warn: 60, watch: 60, siege: 60,
+    loot: 0.35, wall: 0.02, wallMax: 0.5, barracks: 0.3, barracksMax: 0.6,
     repairEvery: 30, repairCost: 0.3,
     battery: { range: 400, cd: 2.2, dmg: 6, ammo: { bala_explosiva: 22, balas: 13 }, max: 20 },
   };
@@ -194,7 +195,7 @@
   //   strike: con la moral por debajo de esto, hay huelga.
   //   ship / merchant: lo que gasta por día tu tripulación y cada mercante por viaje.
   D.COLONY = {
-    day: 360, night: 120, fade: 20,
+    day: 600, night: 150, fade: 25,
     crew: { extractor: 2, lenadores: 2, aserradero: 2, fundicion: 2, herreria: 2, taller: 2, cartografo: 1, pesqueria: 1, canaveral: 2, cocina: 1, destileria: 2 },
     food: ['pesqueria', 'canaveral', 'cocina', 'destileria'],
     ronPer: 0.5, anejo: 0.1, // el ron añejo cuenta como ron y además sube la moral
