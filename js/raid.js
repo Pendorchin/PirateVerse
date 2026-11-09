@@ -14,9 +14,10 @@
 
   Raid.st = function () {
     const S = PV.state;
-    if (!S.raid) S.raid = { next: Raid.toNext(), cur: null, weekly: 1 };
+    if (!S.raid) S.raid = { next: Raid.toNext(), cur: null, weekly: 2 };
     // Partidas de antes: pasan al calendario semanal.
-    if (!S.raid.weekly) { S.raid.weekly = 1; if (!S.raid.cur) S.raid.next = Raid.toNext(); }
+    // (weekly 2: se recalcula al cambiar el largo del día.)
+    if (S.raid.weekly !== 2) { S.raid.weekly = 2; if (!S.raid.cur) S.raid.next = Raid.toNext(); }
     return S.raid;
   };
 
