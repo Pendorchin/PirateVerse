@@ -7,17 +7,23 @@
   const TAU = Math.PI * 2;
   const Raid = {};
 
-  // Los asaltos llegan una vez por semana, al amanecer (días 8, 15, 22…).
-  const WEEK = () => R.week * D.COLONY.day;
-  Raid.toNext = () => WEEK() - ((PV.state.time || 0) % WEEK());
-  Raid.nextDay = () => Math.floor(((PV.state.time || 0) + Raid.toNext()) / D.COLONY.day) + 1;
+  // Los asaltos llegan al amanecer, una vez por semana (cada R.week días). Si te hacés rico,
+  // los piratas se enteran y vienen antes: hasta cada 3 días. st.lastDay: día del último asalto.
+  const day = () => PV.Colony.dayN();
+  Raid.daysBetween = function () {
+    const w = Raid.wealth();
+    return R.week - R.richAt.filter(x => w >= x).length;
+  };
+  Raid.nextDay = () => Math.max(day() + (PV.Colony.phase() > 1 ? 1 : 0), Raid.st().lastDay + Raid.daysBetween());
 
   Raid.st = function () {
     const S = PV.state;
-    if (!S.raid) S.raid = { next: Raid.toNext(), cur: null, weekly: 2 };
-    // Partidas de antes: pasan al calendario semanal.
-    // (weekly 2: se recalcula al cambiar el largo del día.)
-    if (S.raid.weekly !== 2) { S.raid.weekly = 2; if (!S.raid.cur) S.raid.next = Raid.toNext(); }
+    if (!S.raid) S.raid = { cur: null, lastDay: 1, weekly: 3 };
+    // Partidas de antes: el próximo asalto queda donde estaba (una semana después del anterior).
+    if (S.raid.weekly !== 3) {
+      const next = S.raid.cur ? day() : Math.floor(((S.time || 0) + Math.max(0, S.raid.next || 0)) / D.COLONY.day) + 1;
+      S.raid.weekly = 3; S.raid.lastDay = next - R.week;
+    }
     return S.raid;
   };
 
@@ -33,11 +39,6 @@
     const bar = Math.min(R.barracksMax, count(isl, 'cuartel') * R.barracks);
     return 1 - (1 - walls) * (1 - bar);
   };
-
-  // Tiempo hasta el próximo asalto: el amanecer de la semana que viene.
-  function interval() {
-    return Raid.toNext() < 30 ? Raid.toNext() + WEEK() : Raid.toNext();
-  }
 
   // Elige la isla: las más ricas y pobladas atraen más piratas.
   function pickTarget() {
@@ -92,9 +93,8 @@
     if (!S) return;
     const st = Raid.st(), cur = st.cur;
     if (!cur) {
-      st.next -= dt;
-      // Si todavía no hay ninguna isla que valga la pena, esa semana no vienen.
-      if (st.next <= 0) { Raid.start(); st.next = interval(); }
+      // Llegan al amanecer del día que toca. Si no hay ninguna isla que valga la pena, esa vez no vienen.
+      if (PV.Colony.phase() < 2 && day() >= st.lastDay + Raid.daysBetween()) { st.lastDay = day(); Raid.start(); }
       return;
     }
     const isl = S.islands[cur.isl];
@@ -148,7 +148,6 @@
 
   function endRaid(cur) {
     Raid.st().cur = null;
-    Raid.st().next = interval();
     // Los que quedan se van.
     for (const e of Raid.ships()) PV.Sea.enemies.splice(PV.Sea.enemies.indexOf(e), 1);
   }
@@ -189,7 +188,7 @@
     }
     PV.UI.toast(msg, 'bad');
     if (!hard) endRaid(cur);
-    else { Raid.st().cur = null; Raid.st().next = interval(); }
+    else Raid.st().cur = null;
     if (PV.Island.cur === isl && hard) PV.Island.leave();
   }
 

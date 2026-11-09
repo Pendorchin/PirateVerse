@@ -151,7 +151,8 @@
   //   loot: parte del almacén y del banco que se llevan; wall/barracks: cuánto reduce cada empalizada / cuartel.
   D.RAID = {
     // week: cada cuántos días llega un asalto (al amanecer). raidHp: vida extra de los barcos del asalto.
-    week: 7, raidHp: 1.3, warn: 60, watch: 60, siege: 60,
+    // richAt: con esta riqueza (doblones + banco + almacén) vienen un día antes cada vez.
+    week: 7, richAt: [8000, 25000, 60000, 150000], raidHp: 1.3, warn: 60, watch: 60, siege: 60,
     loot: 0.35, wall: 0.02, wallMax: 0.5, barracks: 0.3, barracksMax: 0.6,
     repairEvery: 30, repairCost: 0.3,
     battery: { range: 400, cd: 2.2, dmg: 6, ammo: { bala_explosiva: 22, balas: 13 }, max: 20 },
