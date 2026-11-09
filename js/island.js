@@ -528,6 +528,8 @@
   // Muelle de carga (los barcos se llevan lo que traen los senderos) o de descarga (los barcos dejan la carga ahí).
   Isl.unloadDock = b => b.mode === 'descargar';
   Isl.loadDocks = isl => Isl.docks(isl).filter(d => !Isl.unloadDock(d));
+  // Muelles de carga de los que los mercantes pueden llevarse carga para vender (noSell: solo tu barco y las balandras).
+  Isl.sellDocks = isl => Isl.loadDocks(isl).filter(d => !d.noSell);
 
   // Deja n de k en la isla: primero en los muelles de descarga y lo que no entra, en el almacén.
   // Devuelve cuánto dejó (el almacén solo recibe hasta llenarse si limit es true).
@@ -546,9 +548,9 @@
   };
 
   // Pasa la carga de los muelles de carga a una bodega (cargo) con lugar libre "room".
-  Isl.takeFromDocks = function (isl, cargo, room) {
+  Isl.takeFromDocks = function (isl, cargo, room, toSell) {
     let moved = 0;
-    for (const d of Isl.loadDocks(isl)) {
+    for (const d of toSell ? Isl.sellDocks(isl) : Isl.loadDocks(isl)) {
       for (const k of Object.keys(d.store)) {
         const n = Math.min(room - moved, d.store[k]);
         if (n <= 0) return moved;
@@ -951,7 +953,7 @@
   const NO_ARROW = ['repartidor', 'taberna', 'almacen', 'muelle', 'cartografo', 'banco', 'bateria', 'empalizada', 'cuartel', 'torre_vigia'];
   // Cartel del muelle: "Carga" (verde) o "Descarga" (azul).
   function drawDockSign(ctx, b) {
-    const down = Isl.unloadDock(b), label = down ? '📥 Descarga' : '📤 Carga';
+    const down = Isl.unloadDock(b), label = down ? '📥 Descarga' : b.noSell ? '📤 Carga · no vende' : '📤 Carga';
     ctx.font = 'bold 10px Georgia';
     const tw = ctx.measureText(label).width + 8, x = b.x * T + 2, y = b.y * T - 7;
     ctx.fillStyle = down ? '#2471a3' : '#1e8449'; ctx.strokeStyle = '#3b2410'; ctx.lineWidth = 1;

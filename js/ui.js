@@ -201,7 +201,10 @@
     return `<div class="cb"><div class="cb-title">Modo del muelle</div>
       <div class="dock-mode"><button data-v="dm:cargar" class="${down ? '' : 'on'}">📤 Carga</button><button data-v="dm:descargar" class="${down ? 'on' : ''}">📥 Descarga</button></div>
       <div class="sub">${down ? 'Lo que bajan los barcos (tu barco y las balandras) queda acá. Sacalo con estibadores hacia las fábricas. No recibe de los senderos.'
-        : 'Los senderos traen carga acá y los barcos (tu barco, mercantes y balandras) se la llevan.'}</div></div>`;
+        : 'Los senderos traen carga acá y los barcos (tu barco, mercantes y balandras) se la llevan.'}</div>
+      ${down ? '' : `<div class="cb-title">💰 ¿Los mercantes se llevan la carga para vender?</div>
+      <div class="dock-mode"><button data-v="ds:si" class="${b.noSell ? '' : 'on'}">Sí, vender</button><button data-v="ds:no" class="${b.noSell ? 'on' : ''}">No vender nada</button></div>
+      ${b.noSell ? '<div class="sub">Los mercantes no tocan este muelle. Tu barco y las balandras sí lo cargan.</div>' : ''}`}</div>`;
   }
 
   function pickCoast(v) {
@@ -220,6 +223,7 @@
     if (v === '__close') return UI.closeChooser();
     if (v && v.startsWith('cb:')) return pickCoast(v);
     if (v && v.startsWith('dm:')) { b.mode = v.slice(3); return renderChooser(); }
+    if (v && v.startsWith('ds:')) { b.noSell = v === 'ds:no'; return renderChooser(); }
     if (D.base(b.type) === 'muelle') {
       const i = b.unload.indexOf(v);
       if (i >= 0) b.unload.splice(i, 1); else b.unload.push(v);

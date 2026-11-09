@@ -45,7 +45,7 @@
   Fleet.status = function (m) {
     const H = islandOf(m.home), P = islandOf(m.port), n = PV.Inv.sum(m.cargo);
     if (m.st === 'toHome') return `Volviendo a ${H.name}`;
-    if (m.st === 'load') return PV.Island.docks(H).length ? `Cargando en el muelle (${n}/${Fleet.cap(m)})` : `Esperando: ${H.name} no tiene muelle`;
+    if (m.st === 'load') return PV.Island.sellDocks(H).length ? `Cargando en el muelle (${n}/${Fleet.cap(m)})` : PV.Island.docks(H).length ? `Esperando: los muelles de ${H.name} no venden (o son de descarga)` : `Esperando: ${H.name} no tiene muelle`;
     return `Rumbo a ${P.name} con ${n} de carga`;
   };
 
@@ -90,7 +90,7 @@
       } else if (m.st === 'load') {
         m.v = U.lerp(m.v, 0, Math.min(1, dt * 2));
         m.wait += dt;
-        PV.Island.takeFromDocks(H, m.cargo, Fleet.cap(m) - PV.Inv.sum(m.cargo));
+        PV.Island.takeFromDocks(H, m.cargo, Fleet.cap(m) - PV.Inv.sum(m.cargo), true);
         const n = PV.Inv.sum(m.cargo);
         if (n >= Fleet.cap(m) || (n > 0 && m.wait > 25)) { provision(m, H); m.st = 'toPort'; }
       } else if (m.st === 'toPort') {
