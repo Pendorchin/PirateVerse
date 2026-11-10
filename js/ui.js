@@ -207,7 +207,7 @@
     if (!isl) return '';
     const cost = c => PV.Island.costTxt(c);
     const stat = (kind, lv) => `carga ${LV[kind][lv].cap} · velocidad ${Math.round(LV[kind][lv].spd * 100)}%`;
-    const build = kind => [1, 2, 3].map(lv => {
+    const build = kind => LV[kind].map((_, lv) => lv).filter(Boolean).map(lv => {
       const known = F.knows(kind, lv);
       const c = kind === 'mercante' ? F.nextCost(lv) : LV.balandra[lv].cost;
       const full = kind === 'mercante' ? F.list().length >= D.MERCHANT.max : F.coastOf(isl).length >= F.coastMax(isl);
@@ -225,7 +225,7 @@
       return `<div class="sy-row"><div><b>${b.name}</b> <small>${D.SHIP_NAMES[kind].toLowerCase()} ${F.roman(b.ml)} · ${stat(kind, b.ml || 1)}</small>${c && F.knows(kind, nx) ? `<br><small>${cost(c)}</small>` : ''}</div>${btn}</div>`;
     }).join('');
     const balNote = PV.Island.docks(isl).length ? '' : '<div class="cb-warn">⚠ Las balandras necesitan un muelle en esta isla.</div>';
-    return `<div class="sub">Los materiales salen del almacén de ${isl.name} (y de tu bodega si estás acá). Los planos de nivel II y III se compran en los puertos.</div>
+    return `<div class="sub">Los materiales salen del almacén de ${isl.name} (y de tu bodega si estás acá). Los planos de nivel II y III se compran en los puertos; los de nivel IV, solo en los puertos lejanos.</div>
       <div class="cb"><div class="cb-title">⚓ Tu barco</div>${PV.Port.shipUpHtml(isl)}</div>
       <div class="cb"><div class="cb-title">⛵ Balandras (${F.coastOf(isl).length}/${F.coastMax(isl)})</div>${balNote}${build('balandra')}</div>
       <div class="cb"><div class="cb-title">🚢 Mercantes (${F.list().length}/${D.MERCHANT.max}) · cada uno extra cuesta más</div>${build('mercante')}</div>

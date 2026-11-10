@@ -83,11 +83,13 @@
       if (got < n && isl) got += take(isl, k, n - got);
       return got;
     };
-    const r = eat('raciones', C.ship.raciones), plain = eat('ron', C.ship.ron), fine = eat('ron_anejo', C.ship.ron - plain), ron = plain + fine;
-    sh.hungry = r < C.ship.raciones;
-    sh.mor = U.clamp(sh.mor + (ron >= C.ship.ron ? 0.15 + (fine ? C.anejo : 0) : -0.25), 0, 1);
+    // Los cocineros hacen rendir la comida y el ron.
+    const k = 1 - PV.Crew.bonus('food'), needR = Math.ceil(C.ship.raciones * k), needRon = Math.ceil(C.ship.ron * k);
+    const r = eat('raciones', needR), plain = eat('ron', needRon), fine = eat('ron_anejo', needRon - plain), ron = plain + fine;
+    sh.hungry = r < needR;
+    sh.mor = U.clamp(sh.mor + (ron >= needRon ? 0.15 + (fine ? C.anejo : 0) : -0.25), 0, 1);
     if (sh.hungry) PV.UI.toast('🍖 Tu tripulación se quedó sin raciones: mañana el barco va más lento. Llevá raciones en la bodega.', 'bad');
-    if (ron < C.ship.ron && sh.mor > 0) PV.UI.toast(`🍺 Tu tripulación se quedó sin ron: la moral baja (${Math.round(sh.mor * 100)}%).`, 'bad');
+    if (ron < needRon && sh.mor > 0) PV.UI.toast(`🍺 Tu tripulación se quedó sin ron: la moral baja (${Math.round(sh.mor * 100)}%).`, 'bad');
     if (sh.mor <= 0) {
       const lost = Math.floor(S.doblones * 0.25);
       S.doblones -= lost;
@@ -118,6 +120,7 @@
       else if (r.gotRon < r.needRon) PV.UI.toast(`🍺 En ${n} faltó ron (${r.gotRon}/${r.needRon}): la moral baja.`, 'bad');
     }
     crewSupper();
+    PV.Crew.payday();
   };
 
   // ---------- Textos para la interfaz ----------

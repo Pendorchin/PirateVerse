@@ -297,11 +297,13 @@
     balandra: [null,
       { cap: 40, spd: 1, cost: { doblones: 400, tablones: 30 } },
       { cap: 60, spd: 1.1, cost: { doblones: 600, tablones: 40, lingote_cobre: 10, lona: 10 } },
-      { cap: 80, spd: 1.2, cost: { doblones: 900, tablones: 50, lingote_hierro: 15, velamen: 5 } }],
+      { cap: 80, spd: 1.2, cost: { doblones: 900, tablones: 50, lingote_hierro: 15, velamen: 5 } },
+      { cap: 100, spd: 1.3, cost: { doblones: 1400, tablones: 60, bronce: 20, velamen: 10 } }],
     mercante: [null,
       { cap: 60, spd: 1, cost: { doblones: 800, tablones: 40 } },
       { cap: 90, spd: 1.1, cost: { doblones: 1200, tablones: 60, lingote_cobre: 15, lona: 15 } },
-      { cap: 120, spd: 1.2, cost: { doblones: 1800, tablones: 80, lingote_hierro: 20, velamen: 10 } }],
+      { cap: 120, spd: 1.2, cost: { doblones: 1800, tablones: 80, lingote_hierro: 20, velamen: 10 } },
+      { cap: 150, spd: 1.3, cost: { doblones: 2600, tablones: 100, bronce: 30, velamen: 15 } }],
   };
   D.SHIP_NAMES = { balandra: 'Balandra', mercante: 'Mercante' };
   D.PLANS = {
@@ -309,11 +311,36 @@
     balandra3: { kind: 'balandra', lv: 3, p: 4000, req: 'balandra2' },
     mercante2: { kind: 'mercante', lv: 2, p: 2500 },
     mercante3: { kind: 'mercante', lv: 3, p: 6000, req: 'mercante2' },
+    // Los mejores planos solo se venden en los puertos lejanos (far: 2 = lejos, 3 = en las puntas del mapa).
+    balandra4: { kind: 'balandra', lv: 4, p: 9000, req: 'balandra3', far: 2 },
+    mercante4: { kind: 'mercante', lv: 4, p: 14000, req: 'mercante3', far: 2 },
+    casco_ref: { ship: true, n: 'Casco reforzado', p: 20000, far: 3,
+                 desc: 'Tu barco: un nivel más de bodega, casco, cañones y velas (se mejora en tu Astillero)' },
   };
+  // Qué tan lejos queda un puerto del centro del mapa: hasta 1400 cerca, hasta 2500 lejos, después muy lejos.
+  D.FAR = [1400, 2500];
+
+  // Tripulantes que se contratan en la taberna de cada puerto. Cada zona tiene su oficio;
+  // cuanto más lejos el puerto, mejor el tripulante (rango I, II o III). v[rango] es su bonus.
+  D.CREW = {
+    mansas:   { n: 'Grumete',    icon: '🧒', stat: 'cap',    v: [0, 0.1, 0.2, 0.35], d: v => `+${Math.round(v * 100)}% de carga`,
+                names: ['Tomasito', 'Pancho el Flaco', 'Benito', 'Lalo', 'Quique'] },
+    brumas:   { n: 'Vigía',      icon: '🔭', stat: 'reveal', v: [0, 0.2, 0.4, 0.7],  d: v => `ves ${Math.round(v * 100)}% más lejos`,
+                names: ['Ojo de Halcón', 'Brumoso Díaz', 'La Lechuza', 'Vigil', 'Tuerto Ramírez'] },
+    especias: { n: 'Cocinero',   icon: '🍲', stat: 'food',   v: [0, 0.15, 0.3, 0.5], d: v => `la tripulación come y toma ${Math.round(v * 100)}% menos`,
+                names: ['Doña Canela', 'Pimienta', 'Gordo Azafrán', 'Clavo Méndez', 'Comino'] },
+    coral:    { n: 'Carpintero', icon: '🪚', stat: 'repair', v: [0, 1, 2, 4],        d: v => `repara ${v} de vida por segundo`,
+                names: ['Nácar', 'Martillo Ruiz', 'Viejo Coral', 'Tablón', 'Perlita'] },
+    volcan:   { n: 'Artillero',  icon: '💣', stat: 'dmg',    v: [0, 0.1, 0.2, 0.35], d: v => `+${Math.round(v * 100)}% de daño`,
+                names: ['Pólvora Negra', 'Mecha Corta', 'Azufre', 'El Tronador', 'Ceniza'] },
+  };
+  D.CREW_PRICE = [0, 300, 900, 2500];  // al contratarlo
+  D.CREW_WAGE = [0, 15, 40, 100];      // sueldo por día (se paga al anochecer)
+  D.CREW_SLOTS = 3;                    // +1 con el bergantín y +1 con el galeón
   // Cada mercante extra cuesta más (multiplica los doblones y suma tablones).
   D.MERCHANT_MORE = [1, 1.3, 1.7, 2.2, 2.9];
 
-  // Mejoras del barco. lv[0] es el barco inicial.
+  // Mejoras del barco. lv[0] es el barco inicial. El último nivel pide el plano de casco reforzado.
   D.UP = {
     bodega: { n: 'Bodega', icon: '📦', desc: 'Capacidad de carga', fmt: l => `${l.v} unidades`, lv: [
       { v: 20 },
@@ -321,6 +348,7 @@
       { v: 70,  cost: { doblones: 400, tablones: 40, lingote_hierro: 10 } },
       { v: 110, cost: { doblones: 900, tablones: 60, placa_hierro: 15 } },
       { v: 160, cost: { doblones: 2000, tablones: 80, placa_hierro: 25, lingote_plata: 15 } },
+      { v: 220, cost: { doblones: 4000, tablones: 120, placa_hierro: 40, gemas: 10 } },
     ] },
     casco: { n: 'Casco', icon: '🛡️', desc: 'Vida máxima del barco', fmt: l => `${l.v} de vida`, lv: [
       { v: 100 },
@@ -328,6 +356,7 @@
       { v: 220, cost: { doblones: 600, lingote_hierro: 20 } },
       { v: 320, cost: { doblones: 1500, placa_hierro: 25, lingote_plata: 10 } },
       { v: 460, cost: { doblones: 3500, coral: 20, placa_hierro: 40 } },
+      { v: 620, cost: { doblones: 6000, coral: 40, placa_hierro: 60, lingote_oro: 10 } },
     ] },
     canones: { n: 'Cañones', icon: '💥', desc: 'Cañones por banda y daño', fmt: l => `${l.v} por banda, daño ${l.dmg}`, lv: [
       { v: 2, dmg: 10 },
@@ -335,6 +364,7 @@
       { v: 4, dmg: 13, cost: { doblones: 700, lingote_hierro: 25 } },
       { v: 5, dmg: 16, cost: { doblones: 1600, bronce: 30, polvora: 20 } },
       { v: 6, dmg: 20, cost: { doblones: 3500, bronce: 50, lingote_oro: 10, polvora: 30 } },
+      { v: 7, dmg: 25, cost: { doblones: 6000, bronce: 80, lingote_oro: 20, polvora: 50 } },
     ] },
     velas: { n: 'Velas', icon: '🌬️', desc: 'Velocidad máxima', fmt: l => `velocidad ${l.v}`, lv: [
       { v: 150 },
@@ -342,6 +372,7 @@
       { v: 200, cost: { doblones: 500, lona: 10, tablones: 30 } },
       { v: 225, cost: { doblones: 1200, lona: 25, lingote_hierro: 15 } },
       { v: 255, cost: { doblones: 2800, lona: 40, lingote_plata: 15 } },
+      { v: 285, cost: { doblones: 5000, velamen: 40, lingote_plata: 25 } },
     ] },
   };
 

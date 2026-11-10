@@ -8,6 +8,8 @@
       '⚓ Hay <b>8 puertos</b> (antes 3). Cada zona vende lo suyo barato, paga bien lo que le falta y no compra algunas cosas: llevá mercancía de un mar a otro para ganar más.',
       '📦 Lo que vende un puerto se acaba y se repone de a poco. Raciones, ron y balas se consiguen en todos.',
       '🛠️ Nuevo <b>Astillero</b> en tu isla (tecla <kbd>Y</kbd>, pestaña Logística, va en la costa): construye balandras y mercantes para esa isla y mejora los que tenés a nivel II y III.',
+      '🍺 Nueva pestaña <b>Taberna</b> en los puertos: contratá <b>tripulantes</b> de cada mar. Grumetes (más carga) en Aguas Mansas, vigías (ves más lejos) en las Brumas, cocineros (la tripulación come menos) en las Especias, carpinteros (reparan el barco) en los Arrecifes y artilleros (más daño) en el Mar de Ceniza. <b>Cuanto más lejos el puerto, mejores son</b>. Cobran sueldo cada noche; si no les pagás, se van.',
+      '🗺️ Los <b>puertos lejanos</b> venden planos más potentes: balandra y mercante de <b>nivel IV</b>, y en las puntas del mapa el <b>casco reforzado</b>, que le da a tu barco un nivel más de bodega, casco, cañones y velas.',
       '⚓ Las <b>mejoras de tu barco</b> ahora se hacen en el Astillero de tu isla (ya no en el puerto). Los materiales salen del almacén y de tu bodega; lo que ya habías entregado en un puerto se descuenta.',
       '📜 Los <b>planos</b> de barcos de nivel II y III se compran en los puertos, pestaña 🔨 Astillero. Nivel II: más carga y +10% de velocidad. Nivel III: todavía más carga y +20%.',
       '⚒️ Los edificios ahora piden metal según su nivel: los básicos nada, los mejorados (herrería, taller, banquero, batería, astillero, depósito, puerto propio) <b>lingotes de cobre</b>, y los grandes de 4×4 <b>hierro</b>.',

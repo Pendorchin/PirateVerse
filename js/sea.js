@@ -10,9 +10,10 @@
     const up = PV.state.ship.up;
     const c = D.UP.canones.lv[up.canones];
     return {
-      cap: D.UP.bodega.lv[up.bodega].v,
+      // Los tripulantes suman: grumetes más carga, artilleros más daño.
+      cap: Math.round(D.UP.bodega.lv[up.bodega].v * (1 + PV.Crew.bonus('cap'))),
       maxHp: D.UP.casco.lv[up.casco].v,
-      guns: c.v, dmg: c.dmg,
+      guns: c.v, dmg: Math.round(c.dmg * (1 + PV.Crew.bonus('dmg'))),
       speed: D.UP.velas.lv[up.velas].v * PV.Colony.shipMul(), // con hambre o sin ánimo la tripulación rema peor
       reload: 2.2,
     };
@@ -28,7 +29,7 @@
     }
     const sh = PV.state.ship;
     sh.rl = 0; sh.rr = 0; sh.sunk = 0;
-    reveal(sh.x, sh.y, REVEAL);
+    reveal(sh.x, sh.y, REVEAL * (1 + PV.Crew.bonus('reveal')));
     Sea.zoneK = Wd.zoneAt(sh.x, sh.y);
   };
 
@@ -270,9 +271,12 @@
       if (Math.abs(sh.v) > 25 && Math.random() < 0.6) {
         puff(sh.x - Math.cos(sh.a) * 24, sh.y - Math.sin(sh.a) * 24, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, 'rgba(255,255,255,0.5)', 1.2, 3 + Math.random() * 3);
       }
-      reveal(sh.x, sh.y, REVEAL);
+      reveal(sh.x, sh.y, REVEAL * (1 + PV.Crew.bonus('reveal')));
       checkZone(sh);
 
+      // Los carpinteros reparan el casco en cualquier lado.
+      const fix = PV.Crew.bonus('repair');
+      if (fix && sh.hp < st.maxHp) sh.hp = Math.min(st.maxHp, sh.hp + fix * dt);
       // Reparación lenta cerca de islas propias.
       for (const isl of S.islands) {
         if (isl.owned && U.dist(sh.x, sh.y, isl.x, isl.y) < isl.R + 260) { sh.hp = Math.min(st.maxHp, sh.hp + 4 * dt); break; }

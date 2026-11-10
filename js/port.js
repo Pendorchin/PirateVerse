@@ -5,6 +5,11 @@
   const Port = { isl: null, tab: 'mercado' };
 
   Port.refuses = (isl, k) => Wd.zone(isl).refuses.includes(k);
+  // 1 = cerca del centro, 2 = lejos, 3 = en las puntas del mapa.
+  Port.far = function (isl) {
+    const c = Wd.SIZE / 2, d = Math.hypot(isl.x - c, isl.y - c);
+    return d < D.FAR[0] ? 1 : d < D.FAR[1] ? 2 : 3;
+  };
   const names = ks => ks.map(k => D.RES[k].n.toLowerCase()).join(', ');
   Port.names = names;
   Port.zoneLine = isl => {
@@ -115,9 +120,13 @@
     return c;
   }
 
+  // El último nivel de cada mejora pide el plano de casco reforzado (puertos muy lejanos).
+  const needsRef = key => PV.state.ship.up[key] + 2 >= D.UP[key].lv.length && !PV.Fleet.plans().casco_ref;
+
   Port.upgradeAt = function (key, isl) {
     const S = PV.state, up = D.UP[key], lv = S.ship.up[key], c = upLeft(key);
     if (!c) return;
+    if (needsRef(key)) return PV.UI.toast('Te falta el plano de casco reforzado: se vende en los puertos muy lejanos.', 'bad');
     if (!PV.Inv.canPay(c, isl)) return PV.UI.toast('Faltan materiales o doblones.', 'bad');
     const oldMax = PV.Sea.stats().maxHp;
     PV.Inv.pay(c, isl);
@@ -138,7 +147,9 @@
     return hero + Object.keys(D.UP).map(k => {
       const up = D.UP[k], lv = S.ship.up[k], cur = up.lv[lv], next = up.lv[lv + 1], c = upLeft(k);
       const pips = up.lv.map((_, i) => `<i class="${i <= lv ? 'on' : ''}"></i>`).join('');
-      const right = next
+      const right = next && needsRef(k)
+        ? `<div style="text-align:right"><div>→ ${up.fmt(next)}</div><small class="muted">🔒 Plano de casco reforzado (puertos muy lejanos)</small></div>`
+        : next
         ? `<div style="text-align:right"><div>→ ${up.fmt(next)}</div><div style="font-size:12px;margin:3px 0">${PV.Island.costTxt(c)}</div>
            <button class="primary" data-v="sy:me:${k}" ${PV.Inv.canPay(c, isl) ? '' : 'disabled'}>Mejorar</button></div>`
         : '<b>Nivel máximo</b>';
@@ -168,6 +179,8 @@
     else if (a === 'plan') PV.Fleet.buyPlan(el.dataset.k);
     else if (a === 'fhome' || a === 'fport') PV.Fleet.cycle(+el.dataset.i, a === 'fhome' ? 'home' : 'port');
     else if (a === 'repair') repair();
+    else if (a === 'hire') PV.Crew.hire(Port.isl, +el.dataset.i);
+    else if (a === 'fire') PV.Crew.fire(+el.dataset.i);
     Port.render();
   };
 
@@ -210,11 +223,15 @@
   // Planos de barcos mejorados: se compran acá y se usan en el Astillero de tu isla.
   function plansHtml() {
     const F = PV.Fleet, S = PV.state;
+    const far = Port.far(Port.isl);
     const rows = Object.keys(D.PLANS).map(id => {
-      const P = D.PLANS[id], L = D.SHIP_LV[P.kind][P.lv], have = F.plans()[id], need = P.req && !F.plans()[P.req];
+      const P = D.PLANS[id], have = F.plans()[id], need = P.req && !F.plans()[P.req], away = (P.far || 1) > far;
       const btn = have ? '<b>✔ Ya lo tenés</b>'
+        : away ? `<span class="muted">Se vende en puertos ${P.far === 3 ? 'muy lejanos' : 'lejanos'}</span>`
         : need ? '<span class="muted">Primero el nivel anterior</span>'
         : `<button class="primary" data-act="plan" data-k="${id}" ${S.doblones >= P.p ? '' : 'disabled'}>Comprar (${U.fmt(P.p)} <i class="coin"></i>)</button>`;
+      if (P.ship) return `<div class="upg"><div class="ic">⚓</div><div><h4>Plano: ${P.n}</h4><div class="sub">${P.desc}</div></div>${btn}</div>`;
+      const L = D.SHIP_LV[P.kind][P.lv];
       return `<div class="upg"><div class="ic">📜</div><div><h4>Plano: ${D.SHIP_NAMES[P.kind]} ${F.roman(P.lv)}</h4>
         <div class="sub">Carga ${L.cap} · velocidad ${Math.round(L.spd * 100)}% · se construye con ${PV.Island.costTxt(L.cost)}</div></div>${btn}</div>`;
     }).join('');
@@ -254,12 +271,12 @@
     const prev = el.querySelector('.pbody');
     const scroll = prev ? prev.scrollTop : 0;
     const tab = (id, label) => `<button data-act="tab" data-tab="${id}" class="${Port.tab === id ? 'on' : ''}">${label}</button>`;
-    const body = Port.tab === 'mercado' ? marketHtml() : Port.tab === 'astillero' ? shipyardHtml() : Port.tab === 'flota' ? fleetHtml() : repairHtml();
+    const body = Port.tab === 'mercado' ? marketHtml() : Port.tab === 'astillero' ? shipyardHtml() : Port.tab === 'flota' ? fleetHtml() : Port.tab === 'taberna' ? PV.Crew.html(isl) : repairHtml();
     el.innerHTML = `
       <div class="ph"><h2>⚓ ${isl.name} <small class="muted">· ${Wd.zone(isl).n}</small></h2>
         <div><i class="coin"></i> <b>${U.fmt(S.doblones)}</b> · <i class="crate"></i> ${PV.Inv.cargoTotal()}/${PV.Inv.cargoCap()}</div>
         <button class="primary" data-act="close">⛵ Zarpar (Esc)</button></div>
-      <div class="tabs">${tab('mercado', '🪙 Mercado')}${tab('astillero', '🔨 Astillero')}${tab('flota', '⛵ Flota')}${tab('reparar', '🩹 Reparar')}</div>
+      <div class="tabs">${tab('mercado', '🪙 Mercado')}${tab('astillero', '🔨 Astillero')}${tab('flota', '⛵ Flota')}${tab('taberna', '🍺 Taberna')}${tab('reparar', '🩹 Reparar')}</div>
       <div class="pbody">${body}</div>`;
     el.querySelector('.pbody').scrollTop = scroll;
   };

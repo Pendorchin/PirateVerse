@@ -12,11 +12,11 @@
   Fleet.list = () => PV.state.fleet || (PV.state.fleet = []);
   // ---------- Niveles de barco y planos ----------
   // m.ml: nivel del barco (1, 2 o 3). Los planos del II y el III se compran en los puertos.
-  const LV = D.SHIP_LV, ROMAN = ['', 'I', 'II', 'III'];
+  const LV = D.SHIP_LV, ROMAN = ['', 'I', 'II', 'III', 'IV'];
   Fleet.roman = lv => ROMAN[lv || 1];
   Fleet.plans = () => PV.state.plans || (PV.state.plans = {});
   Fleet.knows = (kind, lv) => lv <= 1 || !!Fleet.plans()[kind + lv];
-  Fleet.bestKnown = kind => (Fleet.knows(kind, 3) ? 3 : Fleet.knows(kind, 2) ? 2 : 1);
+  Fleet.bestKnown = kind => { let lv = 1; while (LV[kind][lv + 1] && Fleet.knows(kind, lv + 1)) lv++; return lv; };
   Fleet.buyPlan = function (id) {
     const P = D.PLANS[id], S = PV.state;
     if (!P || Fleet.plans()[id]) return;
@@ -24,7 +24,8 @@
     if (S.doblones < P.p) return PV.UI.toast('No te alcanzan los doblones.', 'bad');
     S.doblones -= P.p;
     Fleet.plans()[id] = true;
-    PV.UI.toast(`📜 ¡Compraste el plano de ${D.SHIP_NAMES[P.kind].toLowerCase()} nivel ${ROMAN[P.lv]}! Construilo o mejorá tus barcos en un Astillero de tu isla.`, 'good');
+    PV.UI.toast(P.ship ? `📜 ¡Compraste el plano de ${P.n.toLowerCase()}! Mejorá tu barco un nivel más en el Astillero de tu isla.`
+      : `📜 ¡Compraste el plano de ${D.SHIP_NAMES[P.kind].toLowerCase()} nivel ${ROMAN[P.lv]}! Construilo o mejorá tus barcos en un Astillero de tu isla.`, 'good');
   };
 
   // Mercantes: cada uno extra cuesta más (MERCHANT_MORE); lo demás depende del nivel.
