@@ -226,6 +226,7 @@
     }).join('');
     const balNote = PV.Island.docks(isl).length ? '' : '<div class="cb-warn">⚠ Las balandras necesitan un muelle en esta isla.</div>';
     return `<div class="sub">Los materiales salen del almacén de ${isl.name} (y de tu bodega si estás acá). Los planos de nivel II y III se compran en los puertos.</div>
+      <div class="cb"><div class="cb-title">⚓ Tu barco</div>${PV.Port.shipUpHtml(isl)}</div>
       <div class="cb"><div class="cb-title">⛵ Balandras (${F.coastOf(isl).length}/${F.coastMax(isl)})</div>${balNote}${build('balandra')}</div>
       <div class="cb"><div class="cb-title">🚢 Mercantes (${F.list().length}/${D.MERCHANT.max}) · cada uno extra cuesta más</div>${build('mercante')}</div>
       <div class="cb"><div class="cb-title">🛠️ Mejorar barcos de esta isla</div>${rows || '<div class="sub">Todavía no tenés barcos de esta isla.</div>'}</div>`;
@@ -236,6 +237,8 @@
     if (what === 'new') {
       if (kind === 'mercante') F.buildMerchant(isl, +x);
       else { const c = F.buyCoaster(isl, +x); if (c) PV.UI.toast('Elegí sus paradas haciendo clic en el muelle.'); }
+    } else if (what === 'me') {
+      PV.Port.upgradeAt(kind, isl);
     } else if (what === 'up') {
       const b = (kind === 'mercante' ? F.list() : F.coast()).find(o => o.id === +x);
       if (b) F.upgrade(isl, kind, b);
