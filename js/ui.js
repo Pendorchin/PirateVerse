@@ -95,7 +95,11 @@
     $('buildcats').innerHTML = D.BUILD_CATS.map(c => `<button data-cat="${c.k}">${c.icon} ${c.n}</button>`).join('');
     $('buildcats').addEventListener('click', e => {
       const b = e.target.closest('button');
-      if (b) UI.setCat(b.dataset.cat);
+      if (!b) return;
+      UI.setCat(b.dataset.cat);
+      // Lo que tenías en la mano queda en la otra pestaña: lo soltamos.
+      const s = PV.Island.sel;
+      if (s && D.BUILD[s] && D.BUILD[s].cat !== b.dataset.cat) PV.Island.sel = UI._lastSel = null;
     });
     bar.innerHTML = Object.keys(D.BUILD).map(k => {
       const d = D.BUILD[k];
@@ -461,8 +465,13 @@
         el.style.top = (PV.Input.my + 18) + 'px';
       }
       document.querySelectorAll('#buildbar button').forEach(b => b.classList.toggle('sel', b.dataset.b === PV.Island.sel));
-      const sc = PV.Island.sel && D.BUILD[PV.Island.sel].cat;
-      if (sc && sc !== UI.cat) UI.setCat(sc);
+      // Sólo seguimos la categoría cuando cambia lo elegido (p. ej. con una tecla);
+      // si el jugador cambia de pestaña a mano, no lo devolvemos.
+      if (PV.Island.sel !== UI._lastSel) {
+        UI._lastSel = PV.Island.sel;
+        const sc = PV.Island.sel && D.BUILD[PV.Island.sel] && D.BUILD[PV.Island.sel].cat;
+        if (sc && sc !== UI.cat) UI.setCat(sc);
+      }
       $('buildcats').style.bottom = (48 + $('buildbar').offsetHeight + 6) + 'px';
     }
 

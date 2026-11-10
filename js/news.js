@@ -21,6 +21,7 @@
       '💪 Estibador: nueva opción <b>⛔ Nada</b> para dejarlo parado. Y con la investigación <b>Estibadores con lista</b>, la opción <b>🔬 Lo que pide la investigación</b>: saca del almacén solo lo que le falta a la investigación de ahora.',
       '🎵 Música de fondo tranquila, con olas. Se apaga con el botón 🔊 de abajo a la derecha.',
       '🐛 Arreglado: las minas profundas, el campamento maderero, el alto horno y los demás edificios grandes (y también la pesquería y la cocina) no sacaban nada por la flecha. Ahora entregan a cualquiera de las dos casillas de adelante.',
+      '🐛 Arreglado: con un edificio elegido para colocar no se podía cambiar de pestaña de construcción.',
       '🐛 Arreglado: después de la primera noche los pescadores, los que cosechan caña, los mineros y demás trabajadores se quedaban quietos.',
     ] },
     { t: 'Partida en la nube', d: '8 nov 2026', items: [
